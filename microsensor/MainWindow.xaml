@@ -1,0 +1,69 @@
+<Window x:Class="microsensor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:microsensor"
+        Title="Watchgas MicroSensor"
+        Width="900" Height="600"
+        WindowStartupLocation="CenterScreen"
+        Loaded="OnLoaded"
+        Closing="OnClosing">
+    <DockPanel>
+        <!-- 工具栏：三行 -->
+        <StackPanel DockPanel.Dock="Top" Margin="6,6,6,2">
+            <!-- 第一行 -->
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                <TextBlock Text="Serial:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <ComboBox x:Name="PortCombo" Width="150" SelectionChanged="OnPortChanged"/>
+                <Button x:Name="RefreshBtn" Content="Refresh" Margin="4,0,0,0" Click="OnRefreshClicked"/>
+                <TextBlock Text="Baud:" VerticalAlignment="Center" Margin="10,0,4,0" Visibility="Collapsed"/>
+                <TextBox x:Name="BaudEdit" Width="70" LostFocus="OnBaudEdited" Visibility="Collapsed"/>
+                <Button x:Name="StartBtn" Content="Start" Margin="10,0,0,0" Width="70" Click="OnStartClicked"/>
+                <Button x:Name="ExportBtn" Content="Export" Margin="4,0,0,0" Click="OnExportClicked"/>
+                <Button x:Name="ClearBtn" Content="Clear" Margin="4,0,0,0" Click="OnClearClicked"/>
+                <CheckBox x:Name="ConvertMvCheck" Content="mV" VerticalAlignment="Center" Margin="10,0,0,0" Checked="OnConvertMvChanged" Unchecked="OnConvertMvChanged"/>
+                <Button x:Name="ThemeButton" Content="Dark" Margin="10,0,0,0" Width="50" Click="OnThemeButtonClicked"/>
+            </StackPanel>
+            <!-- 第二行 -->
+            <StackPanel Orientation="Horizontal" Margin="0,2,0,2">
+                <TextBlock Text="Vref:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <TextBox x:Name="VrefEdit" Width="50" Text="0.00"/>
+                <ComboBox x:Name="VrefCombo" Width="90" Visibility="Collapsed"/>
+                <CheckBox x:Name="VrefDacCheck" Content="DAC" VerticalAlignment="Center" Margin="6,0,0,0" Checked="OnDacToggled" Unchecked="OnDacToggled"/>
+                <TextBlock Text="Bias:" VerticalAlignment="Center" Margin="10,0,4,0"/>
+                <TextBox x:Name="BiasEdit" Width="50" Text="0.00"/>
+                <ComboBox x:Name="BiasCombo" Width="90" Visibility="Collapsed"/>
+                <CheckBox x:Name="BiasDacCheck" Content="DAC" VerticalAlignment="Center" Margin="6,0,0,0" Checked="OnDacToggled" Unchecked="OnDacToggled"/>
+                <TextBlock Text="Resistor:" VerticalAlignment="Center" Margin="10,0,4,0"/>
+                <ComboBox x:Name="ResistorCombo" Width="100"/>
+                <Button x:Name="SetCfgBtn" Content="Set" Margin="10,0,0,0" Width="50" Click="OnSetConfigClicked"/>
+                <Button x:Name="ReadCfgBtn" Content="Read" Margin="4,0,0,0" Width="50" Click="OnReadConfigClicked"/>
+            </StackPanel>
+            <!-- 第三行 -->
+            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                <TextBlock Text="SensorID:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <ComboBox x:Name="SensorIdCombo" Width="110"/>
+                <Button x:Name="ReadSensorIdBtn" Content="Read" Margin="4,0,0,0" Width="50" Click="OnReadSensorIdClicked"/>
+                <Button x:Name="WriteSensorIdBtn" Content="Write" Margin="4,0,0,0" Width="50" Click="OnWriteSensorIdClicked"/>
+                <TextBlock Text="Duration(s):" VerticalAlignment="Center" Margin="10,0,4,0"/>
+                <TextBox x:Name="DisplaySecondsEdit" Width="80" Text="1800" KeyDown="OnDisplaySecondsKeyDown"/>
+                <Button x:Name="DisplaySecondsSetBtn" Content="Set" Margin="4,0,0,0" Width="50" Click="OnDisplaySecondsSetClicked"/>
+            </StackPanel>
+            <!-- 第四行 -->
+            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                <TextBlock Text="taskmanager pipe name:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <TextBox x:Name="TaskManagerPipeEdit" Width="180" Text="task_manager"
+                         LostFocus="OnTaskManagerPipeEdited"
+                         ToolTip="Named pipe used by the task_manager program"/>
+            </StackPanel>
+        </StackPanel>
+        <!-- 底部：通道面板 + 图表 -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <local:ChannelPanel x:Name="ChannelPanel1" Grid.Column="0"/>
+            <local:PlotPanel x:Name="PlotPanel1" Grid.Column="1" Margin="6,0,0,0"/>
+        </Grid>
+    </DockPanel>
+</Window>

@@ -1,0 +1,53 @@
+<Window x:Class="smartsensor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:smartsensor"
+        Title="SmartSensor" Width="1000" Height="700"
+        WindowStartupLocation="CenterScreen"
+        Loaded="OnLoaded"
+        Closing="OnClosing">
+    <DockPanel>
+        <!-- Toolbar -->
+        <StackPanel DockPanel.Dock="Top" Margin="6,6,6,2">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                <TextBlock Text="Board:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <ComboBox x:Name="BoardCombo" Width="240" VerticalContentAlignment="Center"/>
+                <Button x:Name="RefreshBtn" Content="Refresh" Margin="4,0,0,0" Width="70" Click="OnRefreshClicked"/>
+                <Button x:Name="ClearBtn" Content="Clear" Margin="4,0,0,0" Width="60" Click="OnClearClicked"/>
+                <Button x:Name="StartBtn" Content="Start" Margin="10,0,0,0" Width="70" Click="OnStartClicked"/>
+                <Button x:Name="ThemeButton" Content="Dark" Margin="10,0,0,0" Width="60" Click="OnThemeButtonClicked"/>
+                <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="12,0,0,0"
+                           FontWeight="SemiBold"/>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,2,0,2">
+                <TextBlock Text="Chart field:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <ComboBox x:Name="FieldCombo" Width="140" SelectionChanged="OnFieldChanged">
+                    <ComboBoxItem Content="reading" IsSelected="True"/>
+                    <ComboBoxItem Content="raw"/>
+                    <ComboBoxItem Content="raw_ref"/>
+                    <ComboBoxItem Content="temperature"/>
+                </ComboBox>
+                <TextBlock Text="Duration(s):" VerticalAlignment="Center" Margin="12,0,4,0"/>
+                <TextBox x:Name="DurationEdit" Width="80" Text="1800" VerticalContentAlignment="Center"/>
+                <Button x:Name="DurationSetBtn" Content="Set" Margin="4,0,0,0" Width="50" Click="OnDurationSetClicked"/>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                <TextBlock Text="TaskManager pipe name:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <TextBox x:Name="TaskManagerPipeEdit" Width="180" Text="task_manager"
+                         VerticalContentAlignment="Center" TextChanged="OnTaskManagerPipeTextChanged"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Channel panel + chart -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <local:ChannelPanel x:Name="ChannelPanel1" Grid.Column="0"/>
+            <local:PlotPanel x:Name="PlotPanel1" Grid.Column="1" Margin="6,0,0,0"/>
+        </Grid>
+    </DockPanel>
+</Window>

@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="chamber\chamber.csproj" />
+  <Project Path="yixing_chamber\yixing_chamber.csproj" />
+  <Project Path="smartsensor\smartsensor.csproj" />
+  <Project Path="alicat_mfc\alicat_mfc.csproj" />
+  <Project Path="binder_chamber\binder_chamber.csproj" />
+  <Project Path="task_manager\task_manager.csproj" />
+  <Project Path="com_capture\com_capture.csproj" />
+</Solution>

@@ -1,0 +1,532 @@
+<Window x:Class="alicat_mfc.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:alicat_mfc"
+        mc:Ignorable="d"
+        Title="Alicat MFC" Height="720" Width="1040"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top bar: pipe server + refresh/connect -->
+        <Border Grid.Row="0"
+                Padding="16,12"
+                CornerRadius="6"
+                BorderBrush="#D0D0D0"
+                BorderThickness="1"
+                Background="White">
+            <StackPanel>
+                <TextBlock Text="COMMUNICATION SETTINGS"
+                           FontWeight="SemiBold"
+                           Foreground="#333333"
+                           Margin="0,0,0,10"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Text="Pipe name:"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox x:Name="PipeNameTextBox"
+                             Grid.Column="1"
+                             Text="alicat_mfc"
+                             Height="26"
+                             VerticalContentAlignment="Center"
+                             ToolTip="Named pipe server name"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <Button x:Name="ApplyPipeButton"
+                                Content="Apply"
+                                Margin="10,0,4,0"
+                                Padding="12,5"
+                                Click="ApplyPipeButton_Click"
+                                ToolTip="Restart the pipe server with this name"/>
+                        <ToggleButton x:Name="PipeToggleButton"
+                                      Content="Pipe: ON"
+                                      IsChecked="True"
+                                      Width="86"
+                                      Height="28"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center"
+                                      Checked="PipeToggle_Checked"
+                                      Unchecked="PipeToggle_Unchecked"
+                                      ToolTip="Enable / disable the named pipe server"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="RefreshButton"
+                                Content="Refresh"
+                                Margin="0,0,10,0"
+                                Padding="12,5"
+                                Click="RefreshButton_Click"
+                                ToolTip="Scan for available serial ports"/>
+                        <Button x:Name="ConnectButton"
+                                Content="Connect"
+                                Padding="12,5"
+                                Click="ConnectButton_Click"
+                                ToolTip="Connect to the selected ports"/>
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock x:Name="ConnectionStatusText"
+                           Foreground="#C0504D"
+                           FontWeight="SemiBold"
+                           Margin="0,10,0,0"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Device panels -->
+        <Grid Grid.Row="1" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Device 1 -->
+            <Border Grid.Column="0"
+                    Padding="16,12"
+                    CornerRadius="6"
+                    BorderBrush="#D0D0D0"
+                    BorderThickness="1"
+                    Background="White">
+                <StackPanel>
+                    <TextBlock Text="DEVICE 1"
+                               FontWeight="SemiBold"
+                               Foreground="#333333"
+                               Margin="0,0,0,6"/>
+                    <!-- Serial settings for device 1 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="40"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="70"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Port:"
+                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <ComboBox x:Name="PortComboBox1"
+                                  Grid.Column="1"
+                                  Height="26"
+                                  VerticalContentAlignment="Center"
+                                  IsEditable="True"
+                                  IsReadOnly="True"
+                                  ToolTip="Select serial port for device 1"/>
+                        <TextBlock Grid.Column="2" Text="Addr:"
+                                   VerticalAlignment="Center" Margin="8,0,4,0"/>
+                        <TextBox x:Name="AddressTextBox1"
+                                 Grid.Column="3"
+                                 Text="A"
+                                 Height="26"
+                                 MaxLength="1"
+                                 VerticalContentAlignment="Center"
+                                 TextAlignment="Center"
+                                 ToolTip="Device address (A-Z)"
+                                 PreviewTextInput="AddressTextBox_PreviewTextInput"
+                                 DataObject.Pasting="AddressTextBox_Pasting"
+                                 InputMethod.IsInputMethodEnabled="False"
+                                 TextChanged="AddressTextBox_TextChanged"/>
+                        <TextBlock Grid.Column="4" Text="Baud:"
+                                   VerticalAlignment="Center" Margin="8,0,4,0"/>
+                        <TextBox x:Name="BaudTextBox1"
+                                 Grid.Column="5"
+                                 Text="19200"
+                                 Height="26"
+                                 VerticalContentAlignment="Center"
+                                 ToolTip="Baud rate (e.g. 19200)"
+                                 PreviewTextInput="BaudTextBox_PreviewTextInput"
+                                 DataObject.Pasting="BaudTextBox_Pasting"
+                                 InputMethod.IsInputMethodEnabled="False"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <RadioButton x:Name="TargetRadio1"
+                                     GroupName="Role1"
+                                     Content="Target gas"
+                                     IsChecked="True"
+                                     Margin="0,0,16,0"
+                                     Checked="RoleRadio_Checked"/>
+                        <RadioButton x:Name="BackgroundRadio1"
+                                     GroupName="Role1"
+                                     Content="Background gas"
+                                     Checked="RoleRadio_Checked"/>
+                    </StackPanel>
+
+                    <!-- Status -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Abs. pressure"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                        <TextBlock x:Name="Pressure1Text" Grid.Row="0" Grid.Column="1"
+                                   Text="--" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Temperature"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                        <TextBlock x:Name="Temperature1Text" Grid.Row="1" Grid.Column="1"
+                                   Text="--" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Vol. flow"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                        <TextBlock x:Name="VolFlow1Text" Grid.Row="2" Grid.Column="1"
+                                   Text="--" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Mass flow"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                        <TextBlock x:Name="MassFlow1Text" Grid.Row="3" Grid.Column="1"
+                                   Text="--" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Setpoint"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                        <TextBlock x:Name="Setpoint1Text" Grid.Row="4" Grid.Column="1"
+                                   Text="--" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Gas"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                        <TextBlock x:Name="GasName1Text" Grid.Row="5" Grid.Column="1"
+                                   Text="--" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                    </Grid>
+
+                    <!-- Control -->
+                    <Separator Margin="0,10,0,10"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Set flow (SCCM)"
+                                   VerticalAlignment="Center" Margin="0,4,8,4"/>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
+                            <TextBox x:Name="FlowTextBox1"
+                                     Width="90" Height="26"
+                                     VerticalContentAlignment="Center"
+                                     Margin="0,4,8,4"
+                                     ToolTip="e.g. 0.02 or 123.45"
+                                     PreviewTextInput="FlowTextBox_PreviewTextInput"
+                                     DataObject.Pasting="FlowTextBox_Pasting"
+                                     InputMethod.IsInputMethodEnabled="False"/>
+                            <Button x:Name="SetFlowButton1"
+                                    Content="Set" Padding="12,4"
+                                    Margin="0,4,0,4"
+                                    Click="SetFlowButton_Click"
+                                    ToolTip="Write target flow"/>
+                            <Button x:Name="ZeroButton1"
+                                    Content="Zero" Padding="12,4"
+                                    Margin="4,4,0,4"
+                                    Click="ZeroButton_Click"
+                                    ToolTip="Set flow to zero"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Set gas"
+                                   VerticalAlignment="Center" Margin="0,4,8,4"/>
+                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
+                            <TextBox x:Name="GasTextBox1"
+                                     Width="90" Height="26"
+                                     VerticalContentAlignment="Center"
+                                     Margin="0,4,8,4"
+                                     ToolTip="Gas number, e.g. 0 or 201"
+                                     PreviewTextInput="GasTextBox_PreviewTextInput"
+                                     DataObject.Pasting="GasTextBox_Pasting"
+                                     InputMethod.IsInputMethodEnabled="False"/>
+                            <Button x:Name="SetGasButton1"
+                                    Content="Set" Padding="12,4"
+                                    Margin="0,4,0,4"
+                                    Click="SetGasButton_Click"
+                                    ToolTip="Write gas number"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Device 2 -->
+            <Border Grid.Column="2"
+                    Padding="16,12"
+                    CornerRadius="6"
+                    BorderBrush="#D0D0D0"
+                    BorderThickness="1"
+                    Background="White">
+                <StackPanel>
+                    <TextBlock Text="DEVICE 2"
+                               FontWeight="SemiBold"
+                               Foreground="#333333"
+                               Margin="0,0,0,6"/>
+                    <!-- Serial settings for device 2 -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="40"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="70"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Port:"
+                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <ComboBox x:Name="PortComboBox2"
+                                  Grid.Column="1"
+                                  Height="26"
+                                  VerticalContentAlignment="Center"
+                                  IsEditable="True"
+                                  IsReadOnly="True"
+                                  ToolTip="Select serial port for device 2"/>
+                        <TextBlock Grid.Column="2" Text="Addr:"
+                                   VerticalAlignment="Center" Margin="8,0,4,0"/>
+                        <TextBox x:Name="AddressTextBox2"
+                                 Grid.Column="3"
+                                 Text="A"
+                                 Height="26"
+                                 MaxLength="1"
+                                 VerticalContentAlignment="Center"
+                                 TextAlignment="Center"
+                                 ToolTip="Device address (A-Z); can be same as Device 1 if on a different port"
+                                 PreviewTextInput="AddressTextBox_PreviewTextInput"
+                                 DataObject.Pasting="AddressTextBox_Pasting"
+                                 InputMethod.IsInputMethodEnabled="False"
+                                 TextChanged="AddressTextBox_TextChanged"/>
+                        <TextBlock Grid.Column="4" Text="Baud:"
+                                   VerticalAlignment="Center" Margin="8,0,4,0"/>
+                        <TextBox x:Name="BaudTextBox2"
+                                 Grid.Column="5"
+                                 Text="19200"
+                                 Height="26"
+                                 VerticalContentAlignment="Center"
+                                 ToolTip="Baud rate (e.g. 19200)"
+                                 PreviewTextInput="BaudTextBox_PreviewTextInput"
+                                 DataObject.Pasting="BaudTextBox_Pasting"
+                                 InputMethod.IsInputMethodEnabled="False"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <RadioButton x:Name="TargetRadio2"
+                                     GroupName="Role2"
+                                     Content="Target gas"
+                                     Margin="0,0,16,0"
+                                     Checked="RoleRadio_Checked"/>
+                        <RadioButton x:Name="BackgroundRadio2"
+                                     GroupName="Role2"
+                                     Content="Background gas"
+                                     IsChecked="True"
+                                     Checked="RoleRadio_Checked"/>
+                    </StackPanel>
+
+                    <!-- Status -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Abs. pressure"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                        <TextBlock x:Name="Pressure2Text" Grid.Row="0" Grid.Column="1"
+                                   Text="--" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Temperature"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                        <TextBlock x:Name="Temperature2Text" Grid.Row="1" Grid.Column="1"
+                                   Text="--" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Vol. flow"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                        <TextBlock x:Name="VolFlow2Text" Grid.Row="2" Grid.Column="1"
+                                   Text="--" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Mass flow"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                        <TextBlock x:Name="MassFlow2Text" Grid.Row="3" Grid.Column="1"
+                                   Text="--" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Setpoint"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                        <TextBlock x:Name="Setpoint2Text" Grid.Row="4" Grid.Column="1"
+                                   Text="--" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Gas"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                        <TextBlock x:Name="GasName2Text" Grid.Row="5" Grid.Column="1"
+                                   Text="--" FontSize="15" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,3,0,3"/>
+                    </Grid>
+
+                    <!-- Control -->
+                    <Separator Margin="0,10,0,10"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Set flow (SCCM)"
+                                   VerticalAlignment="Center" Margin="0,4,8,4"/>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
+                            <TextBox x:Name="FlowTextBox2"
+                                     Width="90" Height="26"
+                                     VerticalContentAlignment="Center"
+                                     Margin="0,4,8,4"
+                                     ToolTip="e.g. 0.02 or 123.45"
+                                     PreviewTextInput="FlowTextBox_PreviewTextInput"
+                                     DataObject.Pasting="FlowTextBox_Pasting"
+                                     InputMethod.IsInputMethodEnabled="False"/>
+                            <Button x:Name="SetFlowButton2"
+                                    Content="Set" Padding="12,4"
+                                    Margin="0,4,0,4"
+                                    Click="SetFlowButton_Click"
+                                    ToolTip="Write target flow"/>
+                            <Button x:Name="ZeroButton2"
+                                    Content="Zero" Padding="12,4"
+                                    Margin="4,4,0,4"
+                                    Click="ZeroButton_Click"
+                                    ToolTip="Set flow to zero"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Set gas"
+                                   VerticalAlignment="Center" Margin="0,4,8,4"/>
+                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
+                            <TextBox x:Name="GasTextBox2"
+                                     Width="90" Height="26"
+                                     VerticalContentAlignment="Center"
+                                     Margin="0,4,8,4"
+                                     ToolTip="Gas number, e.g. 0 or 201"
+                                     PreviewTextInput="GasTextBox_PreviewTextInput"
+                                     DataObject.Pasting="GasTextBox_Pasting"
+                                     InputMethod.IsInputMethodEnabled="False"/>
+                            <Button x:Name="SetGasButton2"
+                                    Content="Set" Padding="12,4"
+                                    Margin="0,4,0,4"
+                                    Click="SetGasButton_Click"
+                                    ToolTip="Write gas number"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Gas mixing panel -->
+            <Border Grid.Column="3"
+                    Padding="16,12"
+                    CornerRadius="6"
+                    BorderBrush="#D0D0D0"
+                    BorderThickness="1"
+                    Background="White"
+                    Margin="16,0,0,0">
+                <StackPanel>
+                    <TextBlock Text="GAS MIXING"
+                               FontWeight="SemiBold"
+                               Foreground="#333333"
+                               Margin="0,0,0,10"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Total flow -->
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Total flow (SCCM)"
+                                   VerticalAlignment="Center" Margin="0,4,8,4"/>
+                        <TextBox x:Name="TotalFlowTextBox"
+                                 Grid.Row="0" Grid.Column="1"
+                                 Height="26"
+                                 VerticalContentAlignment="Center"
+                                 Margin="0,4,8,4"
+                                 ToolTip="Total flow in SCCM"
+                                 PreviewTextInput="FlowTextBox_PreviewTextInput"
+                                 DataObject.Pasting="FlowTextBox_Pasting"
+                                 InputMethod.IsInputMethodEnabled="False"/>
+
+                        <!-- Source concentration -->
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Source conc."
+                                   VerticalAlignment="Center" Margin="0,4,8,4"/>
+                        <TextBox x:Name="SourceConcTextBox"
+                                 Grid.Row="1" Grid.Column="1"
+                                 Height="26"
+                                 VerticalContentAlignment="Center"
+                                 Margin="0,4,8,4"
+                                 ToolTip="Source gas concentration (1 - 1000000)"
+                                 PreviewTextInput="FlowTextBox_PreviewTextInput"
+                                 DataObject.Pasting="FlowTextBox_Pasting"
+                                 InputMethod.IsInputMethodEnabled="False"/>
+
+                        <!-- Target concentration -->
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Target conc."
+                                   VerticalAlignment="Center" Margin="0,4,8,4"/>
+                        <TextBox x:Name="TargetConcTextBox"
+                                 Grid.Row="2" Grid.Column="1"
+                                 Height="26"
+                                 VerticalContentAlignment="Center"
+                                 Margin="0,4,8,4"
+                                 ToolTip="Target gas concentration (0 - 1000000)"
+                                 PreviewTextInput="FlowTextBox_PreviewTextInput"
+                                 DataObject.Pasting="FlowTextBox_Pasting"
+                                 InputMethod.IsInputMethodEnabled="False"/>
+
+                        <!-- Apply -->
+                        <Button x:Name="SetGasMixingButton"
+                                Grid.Row="3" Grid.Column="1"
+                                Content="Set" Padding="12,4"
+                                HorizontalAlignment="Left"
+                                Margin="0,8,0,4"
+                                Click="SetGasMixingButton_Click"
+                                ToolTip="Apply gas mixing (compute and write both flows)"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

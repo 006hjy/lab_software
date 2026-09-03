@@ -1,0 +1,278 @@
+<Window x:Class="task_manager.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Task Manager" Height="640" Width="960"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>   <!-- pipe settings -->
+            <RowDefinition Height="*"/>      <!-- task list + editor -->
+        </Grid.RowDefinitions>
+
+        <!-- ===== Pipe settings ===== -->
+        <Border Grid.Row="0"
+                Padding="16,12"
+                CornerRadius="6"
+                BorderBrush="#D0D0D0"
+                BorderThickness="1"
+                Background="White">
+            <StackPanel>
+                <TextBlock Text="PIPE SETTINGS"
+                           FontWeight="SemiBold"
+                           Foreground="#333333"
+                           Margin="0,0,0,10"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="MFC pipe:"
+                               VerticalAlignment="Center" Margin="0,0,8,6"/>
+                    <TextBox x:Name="MfcPipeTextBox"
+                             Grid.Row="0" Grid.Column="1"
+                             Text="alicat_mfc"
+                             Height="26"
+                             VerticalContentAlignment="Center"
+                             Margin="0,0,16,6"
+                             TextChanged="OnMfcPipeTextChanged"
+                             ToolTip="Named pipe used by the MFC control program"/>
+                    <TextBlock Grid.Row="0" Grid.Column="2" Text="Chamber pipe:"
+                               VerticalAlignment="Center" Margin="0,0,8,6"/>
+                    <TextBox x:Name="ChamberPipeTextBox"
+                             Grid.Row="0" Grid.Column="3"
+                             Text="chamber"
+                             Height="26"
+                             VerticalContentAlignment="Center"
+                             Margin="0,0,16,6"
+                             TextChanged="OnChamberPipeTextChanged"
+                             ToolTip="Named pipe used by the chamber control program"/>
+                    <TextBlock Grid.Row="0" Grid.Column="4" Text="Self pipe:"
+                               VerticalAlignment="Center" Margin="0,0,8,6"/>
+                    <TextBox x:Name="SelfPipeTextBox"
+                             Grid.Row="0" Grid.Column="5"
+                             Text="task_manager"
+                             Height="26"
+                             VerticalContentAlignment="Center"
+                             Margin="0,0,0,6"
+                             ToolTip="Name of this program's own named pipe"/>
+                </Grid>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <Button x:Name="LoadConfigBtn"
+                            Content="Load Config"
+                            Padding="12,5"
+                            Click="OnLoadConfigClicked"
+                            ToolTip="Load pipe names and tasks from an INI file"/>
+                    <Button x:Name="ExportConfigBtn"
+                            Content="Export Config"
+                            Padding="12,5"
+                            Margin="8,0,0,0"
+                            Click="OnExportConfigClicked"
+                            ToolTip="Export pipe names and tasks to an INI file"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== Task list + editor ===== -->
+        <Grid Grid.Row="1" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="230"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Task list -->
+            <Border Grid.Column="0"
+                    Padding="16,12"
+                    CornerRadius="6"
+                    BorderBrush="#D0D0D0"
+                    BorderThickness="1"
+                    Background="White">
+                <StackPanel>
+                    <TextBlock Text="TASK LIST"
+                               FontWeight="SemiBold"
+                               Foreground="#333333"
+                               Margin="0,0,0,8"/>
+                    <ListBox x:Name="TaskListBox"
+                             Height="340"
+                             DisplayMemberPath="Description"
+                             SelectionChanged="TaskListBox_SelectionChanged"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button x:Name="AddTaskButton"
+                                Content="Add"
+                                Padding="12,5"
+                                Click="AddTaskButton_Click"
+                                ToolTip="Add a new task (using the editor on the right)"/>
+                        <Button x:Name="EditTaskButton"
+                                Content="Edit"
+                                Padding="12,5"
+                                Margin="8,0,0,0"
+                                Click="EditTaskButton_Click"
+                                ToolTip="Save changes to the selected task"/>
+                        <Button x:Name="DeleteTaskButton"
+                                Content="Delete"
+                                Padding="12,5"
+                                Margin="8,0,0,0"
+                                Click="DeleteTaskButton_Click"
+                                ToolTip="Delete the selected task"/>
+                        <Button x:Name="DuplicateTaskButton"
+                                Content="Copy"
+                                Padding="12,5"
+                                Margin="8,0,0,0"
+                                Click="DuplicateTaskButton_Click"
+                                ToolTip="Duplicate the selected task"/>
+                        <Button x:Name="MoveUpButton"
+                                Content="Up"
+                                Padding="12,5"
+                                Margin="8,0,0,0"
+                                Click="MoveUpButton_Click"
+                                ToolTip="Move the selected task up"/>
+                        <Button x:Name="MoveDownButton"
+                                Content="Down"
+                                Padding="12,5"
+                                Margin="8,0,0,0"
+                                Click="MoveDownButton_Click"
+                                ToolTip="Move the selected task down"/>
+                    </StackPanel>
+
+                    <Separator Margin="0,12,0,8"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="StartButton"
+                                Content="Start"
+                                Padding="16,6"
+                                Click="StartButton_Click"
+                                ToolTip="Start running the task list"/>
+                        <Button x:Name="StopButton"
+                                Content="Stop"
+                                Padding="16,6"
+                                Margin="10,0,0,0"
+                                IsEnabled="False"
+                                Click="StopButton_Click"
+                                ToolTip="Stop the running task list"/>
+                        <TextBlock x:Name="StatusText"
+                                   VerticalAlignment="Center"
+                                   Margin="20,0,0,0"
+                                   FontWeight="SemiBold"
+                                   Foreground="#555555"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Task editor -->
+            <Border Grid.Column="2"
+                    Padding="16,12"
+                    CornerRadius="6"
+                    BorderBrush="#D0D0D0"
+                    BorderThickness="1"
+                    Background="White">
+                <StackPanel>
+                    <TextBlock Text="TASK EDITOR"
+                               FontWeight="SemiBold"
+                               Foreground="#333333"
+                               Margin="0,0,0,8"/>
+
+                    <!-- Type -->
+                    <TextBlock Text="Type:" Margin="0,4,0,2"/>
+                    <ComboBox x:Name="TypeComboBox"
+                              Height="26"
+                              Margin="0,0,0,8"
+                              SelectionChanged="TypeComboBox_SelectionChanged"/>
+
+                    <!-- Common: seconds / timeout -->
+                    <TextBlock x:Name="SecondsLabel" Text="Seconds:" Margin="0,4,0,2"/>
+                    <TextBox x:Name="SecondsTextBox"
+                             Height="26"
+                             Margin="0,0,0,2"
+                             PreviewTextInput="NumericTextBox_PreviewTextInput"
+                             DataObject.Pasting="NumericTextBox_Pasting"/>
+                    <TextBlock x:Name="BeepSecondsLabel" Text="Beep last N seconds (0 = off):" Margin="0,4,0,2"/>
+                    <TextBox x:Name="BeepSecondsTextBox"
+                             Height="26"
+                             Margin="0,0,0,2"
+                             PreviewTextInput="NumericTextBox_PreviewTextInput"
+                             DataObject.Pasting="NumericTextBox_Pasting"/>
+
+                    <!-- MFC mix -->
+                    <TextBlock x:Name="TotalFlowLabel" Text="Total flow (SCCM):" Margin="0,4,0,2"/>
+                    <TextBox x:Name="TotalFlowTextBox"
+                             Height="26"
+                             Margin="0,0,0,2"
+                             PreviewTextInput="NumericTextBox_PreviewTextInput"
+                             DataObject.Pasting="NumericTextBox_Pasting"/>
+                    <TextBlock x:Name="SourceConcLabel" Text="Source conc.:" Margin="0,4,0,2"/>
+                    <TextBox x:Name="SourceConcTextBox"
+                             Height="26"
+                             Margin="0,0,0,2"
+                             PreviewTextInput="NumericTextBox_PreviewTextInput"
+                             DataObject.Pasting="NumericTextBox_Pasting"/>
+                    <TextBlock x:Name="TargetConcLabel" Text="Target conc.:" Margin="0,4,0,2"/>
+                    <TextBox x:Name="TargetConcTextBox"
+                             Height="26"
+                             Margin="0,0,0,2"
+                             PreviewTextInput="NumericTextBox_PreviewTextInput"
+                             DataObject.Pasting="NumericTextBox_Pasting"/>
+
+                    <!-- MFC setpoints -->
+                    <TextBlock x:Name="TargetFlowLabel" Text="Target flow (SCCM):" Margin="0,4,0,2"/>
+                    <TextBox x:Name="TargetFlowTextBox"
+                             Height="26"
+                             Margin="0,0,0,2"
+                             PreviewTextInput="NumericTextBox_PreviewTextInput"
+                             DataObject.Pasting="NumericTextBox_Pasting"/>
+                    <TextBlock x:Name="BackgroundFlowLabel" Text="Background flow (SCCM):" Margin="0,4,0,2"/>
+                    <TextBox x:Name="BackgroundFlowTextBox"
+                             Height="26"
+                             Margin="0,0,0,2"
+                             PreviewTextInput="NumericTextBox_PreviewTextInput"
+                             DataObject.Pasting="NumericTextBox_Pasting"/>
+
+                    <!-- Chamber temp/humidity -->
+                    <TextBlock x:Name="ValueLabel" Text="Target value:" Margin="0,4,0,2"/>
+                    <TextBox x:Name="ValueTextBox"
+                             Height="26"
+                             Margin="0,0,0,2"
+                             PreviewTextInput="NumericTextBox_PreviewTextInput"
+                             DataObject.Pasting="NumericTextBox_Pasting"/>
+                    <TextBlock x:Name="EndValueLabel" Text="End value:" Margin="0,4,0,2"/>
+                    <TextBox x:Name="EndValueTextBox"
+                             Height="26"
+                             Margin="0,0,0,2"
+                             PreviewTextInput="NumericTextBox_PreviewTextInput"
+                             DataObject.Pasting="NumericTextBox_Pasting"/>
+                    <TextBlock x:Name="DurationLabel" Text="Duration (seconds):" Margin="0,4,0,2"/>
+                    <TextBox x:Name="DurationTextBox"
+                             Height="26"
+                             Margin="0,0,0,2"
+                             PreviewTextInput="NumericTextBox_PreviewTextInput"
+                             DataObject.Pasting="NumericTextBox_Pasting"/>
+
+                    <!-- Wait condition -->
+                    <TextBlock x:Name="ToleranceLabel" Text="Tolerance (±):" Margin="0,4,0,2"/>
+                    <TextBox x:Name="ToleranceTextBox"
+                             Height="26"
+                             Margin="0,0,0,2"
+                             PreviewTextInput="NumericTextBox_PreviewTextInput"
+                             DataObject.Pasting="NumericTextBox_Pasting"/>
+                    <TextBlock x:Name="TimeoutLabel" Text="Timeout (seconds, 0 = none):" Margin="0,4,0,2"/>
+                    <TextBox x:Name="TimeoutTextBox"
+                             Height="26"
+                             Margin="0,0,0,2"
+                             PreviewTextInput="NumericTextBox_PreviewTextInput"
+                             DataObject.Pasting="NumericTextBox_Pasting"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
