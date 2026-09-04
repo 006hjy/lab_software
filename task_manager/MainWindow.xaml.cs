@@ -40,6 +40,9 @@ namespace task_manager
         private string _runMfcPipe;
         private string _runChamberPipe;
 
+        /// <summary>重复执行次数快照（Start 时从界面捕获）。</summary>
+        private int _runRepeatCount = 1;
+
         /// <summary>Lock guarding writes to the log file.</summary>
         private static readonly object LogLock = new object();
 
@@ -619,6 +622,14 @@ namespace task_manager
             _mfcPipeName = MfcPipeTextBox.Text.Trim();
             _chamberPipeName = ChamberPipeTextBox.Text.Trim();
 
+            string repeat = IniConfig.Read("Run", "Repeat", "1");
+            int repeatCount;
+            if (int.TryParse(repeat, NumberStyles.Integer, CultureInfo.InvariantCulture, out repeatCount)
+                && repeatCount >= 1)
+            {
+                RepeatEdit.Text = repeatCount.ToString(CultureInfo.InvariantCulture);
+            }
+
             _tasks.Clear();
             _tasks.AddRange(TaskListCodec.Load());
         }
@@ -640,6 +651,7 @@ namespace task_manager
             IniConfig.Write("Pipes", "MfcPipe", MfcPipeTextBox.Text.Trim());
             IniConfig.Write("Pipes", "ChamberPipe", ChamberPipeTextBox.Text.Trim());
             IniConfig.Write("Pipes", "SelfPipe", SelfPipeTextBox.Text.Trim());
+            IniConfig.Write("Run", "Repeat", RepeatEdit.Text.Trim());
         }
 
         private void SaveTasks()
@@ -667,6 +679,7 @@ namespace task_manager
                 IniConfig.Write(dlg.FileName, "Pipes", "MfcPipe", MfcPipeTextBox.Text.Trim());
                 IniConfig.Write(dlg.FileName, "Pipes", "ChamberPipe", ChamberPipeTextBox.Text.Trim());
                 IniConfig.Write(dlg.FileName, "Pipes", "SelfPipe", SelfPipeTextBox.Text.Trim());
+                IniConfig.Write(dlg.FileName, "Run", "Repeat", RepeatEdit.Text.Trim());
                 TaskListCodec.Save(_tasks, dlg.FileName);
                 UpdateStatus("Config exported to " + dlg.FileName);
             }
@@ -695,6 +708,13 @@ namespace task_manager
                 MfcPipeTextBox.Text = IniConfig.Read(dlg.FileName, "Pipes", "MfcPipe", DefaultMfcPipe);
                 ChamberPipeTextBox.Text = IniConfig.Read(dlg.FileName, "Pipes", "ChamberPipe", DefaultChamberPipe);
                 SelfPipeTextBox.Text = IniConfig.Read(dlg.FileName, "Pipes", "SelfPipe", DefaultSelfPipe);
+                string repeat = IniConfig.Read(dlg.FileName, "Run", "Repeat", "1");
+                int repeatCount;
+                if (int.TryParse(repeat, NumberStyles.Integer, CultureInfo.InvariantCulture, out repeatCount)
+                    && repeatCount >= 1)
+                {
+                    RepeatEdit.Text = repeatCount.ToString(CultureInfo.InvariantCulture);
+                }
 
                 _tasks.Clear();
                 _tasks.AddRange(TaskListCodec.Load(dlg.FileName));
@@ -778,6 +798,14 @@ namespace task_manager
         {
             if (_running) return;
 
+            int repeat;
+            if (!int.TryParse(RepeatEdit.Text.Trim(), out repeat) || repeat < 1)
+            {
+                MessageBox.Show("Repeat count must be a positive integer.", "Task Manager",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             SaveConfig(); // persist pipe names before running
 
             // Snapshot the pipe names on the UI thread so the background runner
@@ -785,6 +813,7 @@ namespace task_manager
             _runMfcPipe = MfcPipeTextBox.Text.Trim();
             _runChamberPipe = ChamberPipeTextBox.Text.Trim();
             _chamberPipeName = _runChamberPipe;
+            _runRepeatCount = repeat;
 
             _stopRequested = false;
             _running = true;
@@ -795,7 +824,8 @@ namespace task_manager
             ChamberPipeTextBox.IsEnabled = false;
             LoadConfigBtn.IsEnabled = false;
             ExportConfigBtn.IsEnabled = false;
-            UpdateStatus("Running...");
+            RepeatEdit.IsEnabled = false;
+            UpdateStatus(repeat > 1 ? "Running... (repeat " + repeat + ")" : "Running...");
 
             _runnerThread = new Thread(RunTaskList) { IsBackground = true, Name = "TaskRunner" };
             _runnerThread.Start();
@@ -809,19 +839,28 @@ namespace task_manager
 
         private void RunTaskList()
         {
-            for (int i = 0; i < _tasks.Count; i++)
+            int repeat = _runRepeatCount;
+            for (int pass = 1; pass <= repeat; pass++)
             {
                 if (_stopRequested) break;
 
-                _currentIndex = i;
-                UpdateStatus("Task " + (i + 1) + "/" + _tasks.Count + ": " + Describe(_tasks[i]));
-
-                string result = RunOneTask(_tasks[i]);
-                if (result != null)
+                for (int i = 0; i < _tasks.Count; i++)
                 {
-                    // Log failure but continue with the next task.
-                    UpdateStatus("Task " + (i + 1) + " failed: " + result);
-                    LogTaskFailure(i + 1, _tasks[i], result);
+                    if (_stopRequested) break;
+
+                    _currentIndex = i;
+                    string prefix = repeat > 1 ? "Pass " + pass + "/" + repeat + " - " : "";
+                    UpdateStatus(prefix + "Task " + (i + 1) + "/" + _tasks.Count + ": " + Describe(_tasks[i]));
+
+                    string result = RunOneTask(_tasks[i]);
+                    if (result != null)
+                    {
+                        // Log failure but continue with the next task.
+                        UpdateStatus(prefix + "Task " + (i + 1) + " failed: " + result);
+                        LogTaskFailure(i + 1, _tasks[i], result);
+                    }
+
+                    if (_stopRequested) break;
                 }
 
                 if (_stopRequested) break;
@@ -838,6 +877,7 @@ namespace task_manager
                 ChamberPipeTextBox.IsEnabled = true;
                 LoadConfigBtn.IsEnabled = true;
                 ExportConfigBtn.IsEnabled = true;
+                RepeatEdit.IsEnabled = true;
                 UpdateStatus(_stopRequested ? "Stopped." : "Finished.");
             }));
         }
