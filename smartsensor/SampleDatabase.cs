@@ -125,7 +125,7 @@ namespace smartsensor
             {
                 using (var cmd = _conn.CreateCommand())
                 {
-                    cmd.CommandText = @"SELECT ts, channel, reading, raw, raw_ref, temperature
+                    cmd.CommandText = @"SELECT ts, channel, reading, raw, raw_ref, temperature, status
                                         FROM samples ORDER BY ts ASC";
                     using (var reader = cmd.ExecuteReader())
                     {
@@ -138,7 +138,8 @@ namespace smartsensor
                                 Reading = reader.IsDBNull(2) ? 0 : reader.GetDouble(2),
                                 Raw = reader.IsDBNull(3) ? 0 : reader.GetInt32(3),
                                 RawRef = reader.IsDBNull(4) ? 0 : reader.GetInt32(4),
-                                Temperature = reader.IsDBNull(5) ? 0 : reader.GetInt32(5)
+                                Temperature = reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
+                                Status = reader.IsDBNull(6) ? null : reader.GetString(6)
                             });
                         }
                     }

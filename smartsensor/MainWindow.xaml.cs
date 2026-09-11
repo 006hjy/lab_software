@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Win32;
 
 namespace smartsensor
 {
@@ -74,6 +75,26 @@ namespace smartsensor
         private void OnRefreshClicked(object sender, RoutedEventArgs e)
         {
             RefreshBoards();
+        }
+
+        // ---------------- 导出 / 清空 ----------------
+
+        private void OnExportClicked(object sender, RoutedEventArgs e)
+        {
+            var dlg = new SaveFileDialog
+            {
+                FileName = $"smartsensor_export_{DateTime.Now:yyyyMMddHHmm}.csv",
+                Filter = "CSV Files (*.csv)|*.csv",
+            };
+            if (dlg.ShowDialog(this) != true)
+            {
+                return;
+            }
+
+            var rows = _db.FetchAll();
+            Exporter.ExportRowsToCsv(dlg.FileName, rows);
+            MessageBox.Show(this, $"Exported {rows.Count} rows.", "Export",
+                MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void OnClearClicked(object sender, RoutedEventArgs e)

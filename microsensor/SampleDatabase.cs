@@ -106,13 +106,13 @@ namespace microsensor
             return result;
         }
 
-        /// <summary>查询全部数据，按 ts 升序。</summary>
-        public List<Tuple<long, int[]>> FetchAll()
+        /// <summary>查询全部数据（含 status），按 ts 升序。</summary>
+        public List<Tuple<long, int[], string>> FetchAll()
         {
-            var result = new List<Tuple<long, int[]>>();
+            var result = new List<Tuple<long, int[], string>>();
             using (var cmd = _conn.CreateCommand())
             {
-                cmd.CommandText = $"SELECT ts, {ChannelColumns} FROM samples ORDER BY ts ASC";
+                cmd.CommandText = $"SELECT ts, {ChannelColumns}, status FROM samples ORDER BY ts ASC";
                 using (var reader = cmd.ExecuteReader())
                 {
                     while (reader.Read())
@@ -120,7 +120,8 @@ namespace microsensor
                         var values = new int[16];
                         for (int i = 0; i < 16; i++)
                             values[i] = reader.GetInt32(i + 1);
-                        result.Add(Tuple.Create(reader.GetInt64(0), values));
+                        string status = reader.IsDBNull(17) ? null : reader.GetString(17);
+                        result.Add(Tuple.Create(reader.GetInt64(0), values, status));
                     }
                 }
             }

@@ -13,6 +13,7 @@
                 <TextBlock Text="Board:" VerticalAlignment="Center" Margin="0,0,4,0"/>
                 <ComboBox x:Name="BoardCombo" Width="240" VerticalContentAlignment="Center"/>
                 <Button x:Name="RefreshBtn" Content="Refresh" Margin="4,0,0,0" Width="70" Click="OnRefreshClicked"/>
+                <Button x:Name="ExportBtn" Content="Export" Margin="4,0,0,0" Width="60" Click="OnExportClicked"/>
                 <Button x:Name="ClearBtn" Content="Clear" Margin="4,0,0,0" Width="60" Click="OnClearClicked"/>
                 <Button x:Name="StartBtn" Content="Start" Margin="10,0,0,0" Width="70" Click="OnStartClicked"/>
                 <Button x:Name="ThemeButton" Content="Dark" Margin="10,0,0,0" Width="60" Click="OnThemeButtonClicked"/>

@@ -625,7 +625,7 @@ namespace microsensor
         {
             var dlg = new SaveFileDialog
             {
-                FileName = "microsensor_export.csv",
+                FileName = $"microsensor_export_{DateTime.Now:yyyyMMddHHmm}.csv",
                 Filter = "CSV Files (*.csv)|*.csv",
             };
             if (dlg.ShowDialog(this) != true)
