@@ -273,6 +273,21 @@ namespace task_manager
 
         private void AddTaskButton_Click(object sender, RoutedEventArgs e)
         {
+            // With multiple rows selected: append copies of the selected tasks to the end.
+            var idxs = GetSelectedIndices();
+            if (idxs.Count > 1)
+            {
+                var clones = idxs.Select(i => CloneTask(_tasks[i])).ToList();
+                foreach (var c in clones)
+                {
+                    _tasks.Add(c);
+                }
+                SaveTasks();
+                RefreshTaskList();
+                SelectIndices(Enumerable.Range(_tasks.Count - clones.Count, clones.Count).ToList());
+                return;
+            }
+
             TaskItem t;
             if (!ReadEditor(out t))
             {
@@ -285,12 +300,13 @@ namespace task_manager
 
         private void EditTaskButton_Click(object sender, RoutedEventArgs e)
         {
-            int idx = TaskListBox.SelectedIndex;
-            if (idx < 0 || idx >= _tasks.Count)
+            var selected = GetSelectedIndices();
+            if (selected.Count != 1 || selected[0] >= _tasks.Count)
             {
-                ShowError("Select a task to edit.");
+                ShowError("Select exactly one task to edit.");
                 return;
             }
+            int idx = selected[0];
             TaskItem t;
             if (!ReadEditor(out t))
             {
@@ -299,81 +315,154 @@ namespace task_manager
             _tasks[idx] = t;
             SaveTasks();
             RefreshTaskList();
-            TaskListBox.SelectedIndex = idx;
+            SelectIndices(new List<int> { idx });
         }
 
         private void DeleteTaskButton_Click(object sender, RoutedEventArgs e)
         {
-            int idx = TaskListBox.SelectedIndex;
-            if (idx < 0 || idx >= _tasks.Count)
+            var idxs = GetSelectedIndices();
+            if (idxs.Count == 0)
             {
-                ShowError("Select a task to delete.");
+                ShowError("Select task(s) to delete.");
                 return;
             }
-            _tasks.RemoveAt(idx);
+            for (int k = idxs.Count - 1; k >= 0; k--)
+            {
+                _tasks.RemoveAt(idxs[k]);
+            }
             SaveTasks();
             RefreshTaskList();
+            if (_tasks.Count > 0)
+            {
+                SelectIndices(new List<int> { Math.Min(idxs[0], _tasks.Count - 1) });
+            }
         }
 
         private void DuplicateTaskButton_Click(object sender, RoutedEventArgs e)
         {
-            int idx = TaskListBox.SelectedIndex;
-            if (idx < 0 || idx >= _tasks.Count)
+            var idxs = GetSelectedIndices();
+            if (idxs.Count == 0)
             {
-                ShowError("Select a task to copy.");
+                ShowError("Select task(s) to copy.");
                 return;
             }
-            _tasks.Insert(idx + 1, CloneTask(_tasks[idx]));
+            var clones = idxs.Select(i => CloneTask(_tasks[i])).ToList();
+            int insertAt = idxs[idxs.Count - 1] + 1;
+            for (int k = 0; k < clones.Count; k++)
+            {
+                _tasks.Insert(insertAt + k, clones[k]);
+            }
             SaveTasks();
             RefreshTaskList();
+            SelectIndices(Enumerable.Range(insertAt, clones.Count).ToList());
         }
 
         private void MoveUpButton_Click(object sender, RoutedEventArgs e)
         {
-            int idx = TaskListBox.SelectedIndex;
-            if (idx <= 0 || idx >= _tasks.Count)
-            {
-                return;
-            }
-            TaskItem tmp = _tasks[idx - 1];
-            _tasks[idx - 1] = _tasks[idx];
-            _tasks[idx] = tmp;
-            SaveTasks();
-            RefreshTaskList();
-            TaskListBox.SelectedIndex = idx - 1;
+            MoveSelected(true);
         }
 
         private void MoveDownButton_Click(object sender, RoutedEventArgs e)
         {
-            int idx = TaskListBox.SelectedIndex;
-            if (idx < 0 || idx >= _tasks.Count - 1)
+            MoveSelected(false);
+        }
+
+        /// <summary>Move every selected task one step up/down; consecutive rows move as a block.</summary>
+        private void MoveSelected(bool up)
+        {
+            var idxs = GetSelectedIndices();
+            if (idxs.Count == 0)
             {
                 return;
             }
-            TaskItem tmp = _tasks[idx + 1];
-            _tasks[idx + 1] = _tasks[idx];
-            _tasks[idx] = tmp;
+
+            bool moved = false;
+            if (up)
+            {
+                for (int k = 0; k < idxs.Count; k++)
+                {
+                    int i = idxs[k];
+                    if (i == 0 || idxs.Contains(i - 1))
+                    {
+                        continue;
+                    }
+                    var tmp = _tasks[i - 1]; _tasks[i - 1] = _tasks[i]; _tasks[i] = tmp;
+                    idxs[k] = i - 1;
+                    moved = true;
+                }
+            }
+            else
+            {
+                for (int k = idxs.Count - 1; k >= 0; k--)
+                {
+                    int i = idxs[k];
+                    if (i >= _tasks.Count - 1 || idxs.Contains(i + 1))
+                    {
+                        continue;
+                    }
+                    var tmp = _tasks[i + 1]; _tasks[i + 1] = _tasks[i]; _tasks[i] = tmp;
+                    idxs[k] = i + 1;
+                    moved = true;
+                }
+            }
+
+            if (!moved)
+            {
+                return;
+            }
             SaveTasks();
             RefreshTaskList();
-            TaskListBox.SelectedIndex = idx + 1;
+            SelectIndices(idxs);
         }
 
         private void UpdateListButtons()
         {
-            bool canEdit = _tasks.Count > 0;
-            EditTaskButton.IsEnabled = canEdit;
-            DeleteTaskButton.IsEnabled = canEdit;
-            DuplicateTaskButton.IsEnabled = canEdit;
-            MoveUpButton.IsEnabled = canEdit;
-            MoveDownButton.IsEnabled = canEdit;
+            int sel = TaskListBox.SelectedItems.Count;
+            // Edit requires exactly one selection; multiple rows selected disables it.
+            EditTaskButton.IsEnabled = sel == 1;
+            bool hasSel = sel > 0;
+            DeleteTaskButton.IsEnabled = hasSel;
+            DuplicateTaskButton.IsEnabled = hasSel;
+            MoveUpButton.IsEnabled = hasSel;
+            MoveDownButton.IsEnabled = hasSel;
         }
 
         private void TaskListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            int idx = TaskListBox.SelectedIndex;
-            if (idx >= 0 && idx < _tasks.Count)
+            var idxs = GetSelectedIndices();
+            if (idxs.Count == 1 && idxs[0] < _tasks.Count)
             {
-                LoadEditor(_tasks[idx]);
+                LoadEditor(_tasks[idxs[0]]);
+            }
+            UpdateListButtons();
+        }
+
+        /// <summary>Selected row indices, ascending.</summary>
+        private List<int> GetSelectedIndices()
+        {
+            var idxs = new List<int>();
+            foreach (var obj in TaskListBox.SelectedItems)
+            {
+                int i = TaskListBox.Items.IndexOf(obj);
+                if (i >= 0)
+                {
+                    idxs.Add(i);
+                }
+            }
+            idxs.Sort();
+            return idxs;
+        }
+
+        /// <summary>Select the given rows after the list has been rebuilt.</summary>
+        private void SelectIndices(List<int> idxs)
+        {
+            TaskListBox.UnselectAll();
+            foreach (int i in idxs)
+            {
+                if (i >= 0 && i < TaskListBox.Items.Count)
+                {
+                    TaskListBox.SelectedItems.Add(TaskListBox.Items[i]);
+                }
             }
         }
 

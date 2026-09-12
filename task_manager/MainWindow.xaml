@@ -107,6 +107,7 @@
                                Margin="0,0,0,8"/>
                     <ListBox x:Name="TaskListBox"
                              Height="340"
+                             SelectionMode="Extended"
                              DisplayMemberPath="Description"
                              SelectionChanged="TaskListBox_SelectionChanged"/>
                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
@@ -114,37 +115,37 @@
                                 Content="Add"
                                 Padding="12,5"
                                 Click="AddTaskButton_Click"
-                                ToolTip="Add a new task (using the editor on the right)"/>
+                                ToolTip="Add a new task (using the editor on the right). With multiple rows selected, appends copies of the selected tasks to the end of the list"/>
                         <Button x:Name="EditTaskButton"
                                 Content="Edit"
                                 Padding="12,5"
                                 Margin="8,0,0,0"
                                 Click="EditTaskButton_Click"
-                                ToolTip="Save changes to the selected task"/>
+                                ToolTip="Save changes to the selected task (single selection only)"/>
                         <Button x:Name="DeleteTaskButton"
                                 Content="Delete"
                                 Padding="12,5"
                                 Margin="8,0,0,0"
                                 Click="DeleteTaskButton_Click"
-                                ToolTip="Delete the selected task"/>
+                                ToolTip="Delete the selected task(s)"/>
                         <Button x:Name="DuplicateTaskButton"
                                 Content="Copy"
                                 Padding="12,5"
                                 Margin="8,0,0,0"
                                 Click="DuplicateTaskButton_Click"
-                                ToolTip="Duplicate the selected task"/>
+                                ToolTip="Duplicate the selected task(s)"/>
                         <Button x:Name="MoveUpButton"
                                 Content="Up"
                                 Padding="12,5"
                                 Margin="8,0,0,0"
                                 Click="MoveUpButton_Click"
-                                ToolTip="Move the selected task up"/>
+                                ToolTip="Move the selected task(s) up"/>
                         <Button x:Name="MoveDownButton"
                                 Content="Down"
                                 Padding="12,5"
                                 Margin="8,0,0,0"
                                 Click="MoveDownButton_Click"
-                                ToolTip="Move the selected task down"/>
+                                ToolTip="Move the selected task(s) down"/>
                     </StackPanel>
 
                     <Separator Margin="0,12,0,8"/>
