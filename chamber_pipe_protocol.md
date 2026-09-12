@@ -1,6 +1,8 @@
 # Chamber Named Pipe 通讯协议
 
-本文档描述 `chamber.exe` 对外暴露的 named pipe（命名管道）接口，供外部进程读取设备状态、设置温湿度、控制启停以及执行温湿度线性控制（ramp）任务。
+本文档描述箱体控制程序（`chamber.exe` / `yixing_chamber.exe` / `binder_chamber.exe`）对外暴露的 named pipe（命名管道）接口，供外部进程读取设备状态、设置温湿度、控制启停以及执行温湿度线性控制（ramp）任务。
+
+> **并非所有设备都支持所有命令：命令只有在设备的硬件支持时才会有效。** 本套协议为三个控制程序共用，但各设备可用命令集不同（如 yixing_chamber 无湿度硬件、binder_chamber 不支持启停但支持风机），不受支持的命令返回错误。差异明细见 [第 8 节](#8-设备差异说明chamber--yixing_chamber--binder_chamber)。
 
 ---
 
@@ -10,7 +12,7 @@
 |---|---|
 | 传输层 | Windows Named Pipe，字节流模式（`PipeTransmissionMode.Byte`） |
 | 编码 | UTF-8 |
-| 管道名 | 默认 `chamber`（可在 UI 顶部 "Pipe name" 文本框修改，点击 Apply 生效） |
+| 管道名 | 默认与程序同名：`chamber` / `yixing_chamber` / `binder_chamber`（可在 UI 顶部 "Pipe name" 文本框修改，点击 Apply 生效） |
 | 消息格式 | 每行一个 JSON 对象；客户端发送一行请求，服务端返回一行响应 |
 | 连接模型 | 一个连接可进行多轮"请求 → 响应"；服务端逐行读取，每读一行处理并回复一行 |
 
@@ -250,7 +252,30 @@ using (var pipe = new NamedPipeClientStream(".", "chamber", PipeDirection.InOut)
 
 ---
 
-### 4.10 未知命令
+### 4.10 `set_fan` — 设置风机转速（仅 binder_chamber）
+
+立即写入风机转速设定值。
+
+**请求：**
+
+```json
+{"cmd":"set_fan","value":80.0}
+```
+
+**响应：**
+
+| 场景 | 响应 |
+|---|---|
+| 成功 | `{"Ok":true,"Error":null, ...}` |
+| 设备未连接 | `{"Ok":false,"Error":"not connected", ...}` |
+| 超出范围 | `{"Ok":false,"Error":"Fan speed must be between 30 and 100 %.", ...}` |
+| 设备不支持（chamber / yixing_chamber） | `{"Ok":false,"Error":"unknown command: set_fan", ...}` |
+
+> 有效范围：`30.0 ~ 100.0`（%）。
+
+---
+
+### 4.11 未知命令
 
 **请求：**
 
@@ -266,7 +291,7 @@ using (var pipe = new NamedPipeClientStream(".", "chamber", PipeDirection.InOut)
 
 ---
 
-### 4.11 无效请求 / 非法 JSON
+### 4.12 无效请求 / 非法 JSON
 
 | 场景 | 示例请求 | 响应 |
 |---|---|---|
@@ -301,8 +326,10 @@ using (var pipe = new NamedPipeClientStream(".", "chamber", PipeDirection.InOut)
 | `HumRampElapsed` | number | 湿度 ramp 已运行时间（秒） |
 | `HumRampRemaining` | number | 湿度 ramp 剩余时间（秒） |
 | `HumRampTarget` | number | 湿度 ramp 当前应达到的目标值 |
+| `FanSp` | number | 风机转速设定值（%）。**仅 binder_chamber 返回**（共 23 字段） |
 
 > 注：ramp 未运行时，`*RampTarget` 为 `0`，`*RampElapsed` 为 `0`，`*RampRemaining` 等于 `*RampDuration`。
+> 注：**并非所有设备都返回全部字段**——yixing_chamber 无湿度硬件，响应中没有 `CurHum` / `TgtHum` / `HumRamp*` 字段（共 13 字段）；`FanSp` 仅 binder_chamber 提供。外部程序解析时应先判断字段是否存在。
 
 ---
 
@@ -313,9 +340,11 @@ using (var pipe = new NamedPipeClientStream(".", "chamber", PipeDirection.InOut)
 | `not connected` | 串口未连接时调用 `set_temp` / `set_humidity` / `start` / `stop` / `start_temp_ramp` / `start_hum_ramp` |
 | `Temperature must be between -40.0 and 150.0 °C.` | 温度超出范围 |
 | `Humidity must be between 0.0 and 100.0 %RH.` | 湿度超出范围 |
+| `Fan speed must be between 30 and 100 %.` | 风机转速超出范围（binder_chamber） |
 | `duration must be a positive integer (seconds)` | ramp 时长不是正整数 |
 | `invalid request` | 请求缺少 `cmd` 或 `cmd` 为空 |
-| `unknown command: <命令>` | 未识别的命令 |
+| `unknown command: <命令>` | 未识别的命令，或该设备硬件不支持此命令 |
+| `unsupported` | binder_chamber 收到 `start` / `stop`（该设备不支持启停） |
 | `bad request: <解析异常消息>` | JSON 无法解析 |
 
 ---
@@ -327,3 +356,20 @@ using (var pipe = new NamedPipeClientStream(".", "chamber", PipeDirection.InOut)
 3. **ramp 行为**：启动即写开始值，每秒按线性插值更新（粒度 0.1，仅当值变化才写寄存器），时间到写结束值并置为停止；中途停止则目标保持最后值。
 4. **管道实例冲突**：Windows 允许多个进程对同一管道名创建服务器（会互相抢占连接）。chamber 启动管道前会用客户端探针检测冲突，若名称已被占用则拒绝启动并提示。
 5. **响应键名**：为 PascalCase（如 `CurTemp`、`TgtTemp`），与请求键名的小写风格不同，外部程序解析时请以 PascalCase 为准。
+
+---
+
+## 8. 设备差异说明（chamber / yixing_chamber / binder_chamber）
+
+三个控制程序共用同一套管道协议，但**可用命令集取决于设备硬件能力——只有硬件支持，命令才有效**；对不支持的命令，设备返回错误（`unknown command` 或 `unsupported`），或响应中不含相关字段。
+
+| 能力 / 命令 | chamber（默认） | yixing_chamber | binder_chamber |
+|---|---|---|---|
+| 默认管道名 | `chamber` | `yixing_chamber` | `binder_chamber` |
+| 设备连接方式 | 串口 Modbus-RTU | 串口 Modbus（变体） | 以太网（UDP 发现 + TCP Modbus） |
+| `get_status` | ✅ | ✅ | ✅ |
+| `set_temp` / `start_temp_ramp` / `stop_temp_ramp` | ✅ | ✅ | ✅ |
+| `set_humidity` / `start_hum_ramp` / `stop_hum_ramp` | ✅ | ❌ 无湿度硬件（返回 `unknown command`，状态中也无 `CurHum`/`TgtHum`/`HumRamp*` 字段） | ✅ |
+| `set_fan` | ❌ | ❌ | ✅（`30 ~ 100` %） |
+| `start` / `stop` | ✅ | ✅ | ❌ 该机型不支持（返回 `unsupported`，`RunState` 恒为 `0`） |
+| `get_status` 响应字段数 | 22 | 13（无湿度字段） | 23（较 chamber 新增 `FanSp`） |
