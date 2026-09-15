@@ -21,6 +21,7 @@ namespace microsensor
         /// <summary>SensorID 列表：ID 与名称。</summary>
         public static readonly (int Id, string Name)[] SensorIds =
         {
+            (0, "Not Set"),
             (49, "CO"),
             (47, "H2S"),
             (102, "H2-20000"),
