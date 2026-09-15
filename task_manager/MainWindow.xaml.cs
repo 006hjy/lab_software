@@ -941,12 +941,24 @@ namespace task_manager
                     string prefix = repeat > 1 ? "Pass " + pass + "/" + repeat + " - " : "";
                     UpdateStatus(prefix + "Task " + (i + 1) + "/" + _tasks.Count + ": " + Describe(_tasks[i]));
 
-                    string result = RunOneTask(_tasks[i]);
-                    if (result != null)
+                    string result;
+                    while (true)
                     {
-                        // Log failure but continue with the next task.
+                        result = RunOneTask(_tasks[i]);
+                        if (result == null || _stopRequested)
+                        {
+                            break;
+                        }
+
+                        // 任务失败：记录日志、弹窗提醒并暂停，等待用户选择。
                         UpdateStatus(prefix + "Task " + (i + 1) + " failed: " + result);
                         LogTaskFailure(i + 1, _tasks[i], result);
+
+                        if (AskOnTaskFailure(i + 1, result) != TaskFailureAction.Retry)
+                        {
+                            break; // Skip → 下一个任务；Abort → _stopRequested 已置位
+                        }
+                        // Retry → 重新执行当前任务
                     }
 
                     if (_stopRequested) break;
@@ -971,9 +983,42 @@ namespace task_manager
             }));
         }
 
+        private enum TaskFailureAction { Retry, Skip, Abort }
+
+        /// <summary>
+        /// 任务失败时弹窗提醒（模态框阻塞任务线程 = 暂停执行），返回用户选择。
+        /// Yes=重试当前任务，No=跳过继续，Cancel=中止本次运行；Stop 优先于选择。
+        /// </summary>
+        private TaskFailureAction AskOnTaskFailure(int taskNumber, string error)
+        {
+            MessageBoxResult res = Dispatcher.Invoke(() => MessageBox.Show(this,
+                "Task " + taskNumber + " failed:\n\n" + error
+                + "\n\nExecution is paused.\n\nYes = retry this task\nNo = skip and continue\nCancel = abort run",
+                "Task Failed",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No));
+
+            if (_stopRequested)
+            {
+                return TaskFailureAction.Abort;
+            }
+
+            switch (res)
+            {
+                case MessageBoxResult.Yes:
+                    return TaskFailureAction.Retry;
+                case MessageBoxResult.No:
+                    return TaskFailureAction.Skip;
+                default:
+                    _stopRequested = true;
+                    return TaskFailureAction.Abort;
+            }
+        }
+
         /// <summary>
         /// Run a single task. Returns an error string on failure, or null on success.
-        /// Wait tasks time out and return an error (but execution continues).
+        /// A failed task pauses execution and prompts the user (retry / skip / abort).
         /// </summary>
         private string RunOneTask(TaskItem t)
         {
