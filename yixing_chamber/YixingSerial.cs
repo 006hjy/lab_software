@@ -150,16 +150,67 @@ namespace yixing_chamber
             }
         }
 
-        /// <summary>开始运行。</summary>
+        /// <summary>启动箱运行。</summary>
         public bool StartChamber()
         {
             return WriteFrame(FuncWriteCoil, AddrRunStop, RunValue);
         }
 
-        /// <summary>停止运行。</summary>
+        /// <summary>停止箱运行。</summary>
         public bool StopChamber()
         {
             return WriteFrame(FuncWriteCoil, AddrRunStop, StopValue);
+        }
+
+        /// <summary>
+        /// 写入运行/停止线圈并回读验证：写后读运行状态线圈，与目标不符则重发，
+        /// 直到一致或总超时。返回是否最终验证成功；串口不可用时立即返回 false。
+        /// </summary>
+        public bool WriteRunStateVerified(bool run)
+        {
+            int deadline = Environment.TickCount + SetVerifyTimeoutMs;
+            while (Environment.TickCount < deadline)
+            {
+                if (!WriteFrame(FuncWriteCoil, AddrRunStop, run ? RunValue : StopValue))
+                {
+                    return false;
+                }
+                Thread.Sleep(SetVerifyRetryIntervalMs);
+                byte state;
+                if (TryReadRunState(out state) && (state != 0) == run)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>直接回读运行状态线圈（与轮询同一命令、共用 _ioLock）。</summary>
+        private bool TryReadRunState(out byte state)
+        {
+            state = 0;
+            lock (_ioLock)
+            {
+                SerialPort port = _port;
+                if (port == null || !port.IsOpen)
+                {
+                    return false;
+                }
+                try
+                {
+                    byte[] frame = Query(port, FuncReadCoil, 0x01, 6, AddrRunStop);
+                    if (frame == null)
+                    {
+                        return false;
+                    }
+                    state = frame[3];
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
         }
 
         /// <summary>

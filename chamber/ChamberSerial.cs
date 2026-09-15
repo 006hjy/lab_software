@@ -137,10 +137,10 @@ namespace lab_software
                     return false;
                 }
                 Thread.Sleep(SetVerifyRetryIntervalMs);
-                double tgtTemp, tgtHum;
-                if (TryReadSetpoints(out tgtTemp, out tgtHum))
+                ChamberStatus status;
+                if (TryReadStatus(out status))
                 {
-                    double readback = register == AddrSetTemp ? tgtTemp : tgtHum;
+                    double readback = register == AddrSetTemp ? status.TgtTemp : status.TgtHum;
                     if (Math.Abs(readback - value) <= SetVerifyTolerance)
                     {
                         return true;
@@ -151,13 +151,37 @@ namespace lab_software
         }
 
         /// <summary>
-        /// Synchronously read the target temperature/humidity from the status
-        /// frame (same command/parse as the poll loop, shares _ioLock).
+        /// Write the run/stop coil (1 = start, 0 = stop) and verify by reading
+        /// RunState back from the device status frame; resend until it matches
+        /// or the total timeout hits. Returns false on persistent mismatch.
         /// </summary>
-        public bool TryReadSetpoints(out double tgtTemp, out double tgtHum)
+        public bool WriteRunStateVerified(bool run)
         {
-            tgtTemp = 0;
-            tgtHum = 0;
+            short want = (short)(run ? 1 : 0);
+            int deadline = Environment.TickCount + SetVerifyTimeoutMs;
+            while (Environment.TickCount < deadline)
+            {
+                if (!WriteRegister(AddrRunStop, want))
+                {
+                    return false;
+                }
+                Thread.Sleep(SetVerifyRetryIntervalMs);
+                ChamberStatus status;
+                if (TryReadStatus(out status) && status.RunState == want)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Synchronously read one device status frame (same command/parse as
+        /// the poll loop, shares _ioLock).
+        /// </summary>
+        private bool TryReadStatus(out ChamberStatus status)
+        {
+            status = null;
             lock (_ioLock)
             {
                 SerialPort port = _port;
@@ -175,13 +199,10 @@ namespace lab_software
                     }
                     var frame = new byte[StatusFrameLength];
                     Array.Copy(data, data.Length - StatusFrameLength, frame, 0, StatusFrameLength);
-                    ChamberStatus status;
                     if (!TryParse(frame, out status))
                     {
                         return false;
                     }
-                    tgtTemp = status.TgtTemp;
-                    tgtHum = status.TgtHum;
                     return true;
                 }
                 catch

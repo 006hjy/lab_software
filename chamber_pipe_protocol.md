@@ -106,11 +106,12 @@ using (var pipe = new NamedPipeClientStream(".", "chamber", PipeDirection.InOut)
 
 | 场景 | 响应 |
 |---|---|
-| 成功 | `{"Ok":true,"Error":null, ...}` |
+| 成功（已回读验证） | `{"Ok":true,"Error":null, ...}` |
 | 未连接串口 | `{"Ok":false,"Error":"not connected", ...}` |
 | 超出范围 | `{"Ok":false,"Error":"Temperature must be between -40.0 and 150.0 °C.", ...}` |
+| 回读验证失败 | `{"Ok":false,"Error":"verify failed: setpoint readback mismatch", ...}` |
 
-> 有效范围：`-40.0 ~ 150.0`（°C）。
+> 有效范围：`-40.0 ~ 150.0`（°C）。服务端写入后会回读目标温度（`TgtTemp`，寄存器 0.1 分辨率），不符自动重发直到一致或超时（约 10 秒）才响应；`set_humidity`、`set_fan`、`start`/`stop` 同此验证模式。
 
 ---
 
@@ -128,11 +129,12 @@ using (var pipe = new NamedPipeClientStream(".", "chamber", PipeDirection.InOut)
 
 | 场景 | 响应 |
 |---|---|
-| 成功 | `{"Ok":true,"Error":null, ...}` |
+| 成功（已回读验证） | `{"Ok":true,"Error":null, ...}` |
 | 未连接串口 | `{"Ok":false,"Error":"not connected", ...}` |
 | 超出范围 | `{"Ok":false,"Error":"Humidity must be between 0.0 and 100.0 %RH.", ...}` |
+| 回读验证失败 | `{"Ok":false,"Error":"verify failed: setpoint readback mismatch", ...}` |
 
-> 有效范围：`0.0 ~ 100.0`（%RH）。
+> 有效范围：`0.0 ~ 100.0`（%RH）。验证行为同 `set_temp`。
 
 ---
 
@@ -148,8 +150,11 @@ using (var pipe = new NamedPipeClientStream(".", "chamber", PipeDirection.InOut)
 
 | 场景 | 响应 |
 |---|---|
-| 成功 | `{"Ok":true,"Error":null, ...}` |
+| 成功（已回读验证） | `{"Ok":true,"Error":null, ...}` |
 | 未连接串口 | `{"Ok":false,"Error":"not connected", ...}` |
+| 回读验证失败 | `{"Ok":false,"Error":"verify failed: run state readback mismatch", ...}` |
+
+> 服务端写入启停寄存器后会回读运行状态（`RunState`），不符自动重发，直到一致或超时（约 10 秒）才响应。
 
 ---
 
@@ -165,8 +170,11 @@ using (var pipe = new NamedPipeClientStream(".", "chamber", PipeDirection.InOut)
 
 | 场景 | 响应 |
 |---|---|
-| 成功 | `{"Ok":true,"Error":null, ...}` |
+| 成功（已回读验证） | `{"Ok":true,"Error":null, ...}` |
 | 未连接串口 | `{"Ok":false,"Error":"not connected", ...}` |
+| 回读验证失败 | `{"Ok":false,"Error":"verify failed: run state readback mismatch", ...}` |
+
+> 验证行为同 `start`。
 
 ---
 
@@ -266,9 +274,10 @@ using (var pipe = new NamedPipeClientStream(".", "chamber", PipeDirection.InOut)
 
 | 场景 | 响应 |
 |---|---|
-| 成功 | `{"Ok":true,"Error":null, ...}` |
+| 成功（已回读验证） | `{"Ok":true,"Error":null, ...}` |
 | 设备未连接 | `{"Ok":false,"Error":"not connected", ...}` |
 | 超出范围 | `{"Ok":false,"Error":"Fan speed must be between 30 and 100 %.", ...}` |
+| 回读验证失败 | `{"Ok":false,"Error":"verify failed: setpoint readback mismatch", ...}` |
 | 设备不支持（chamber / yixing_chamber） | `{"Ok":false,"Error":"unknown command: set_fan", ...}` |
 
 > 有效范围：`30.0 ~ 100.0`（%）。
@@ -345,7 +354,11 @@ using (var pipe = new NamedPipeClientStream(".", "chamber", PipeDirection.InOut)
 | `invalid request` | 请求缺少 `cmd` 或 `cmd` 为空 |
 | `unknown command: <命令>` | 未识别的命令，或该设备硬件不支持此命令 |
 | `unsupported` | binder_chamber 收到 `start` / `stop`（该设备不支持启停） |
+| `verify failed: setpoint readback mismatch` | `set_temp` / `set_humidity` / `set_fan` 写入后回读目标值持续不符，直到总超时（约 10 秒） |
+| `verify failed: run state readback mismatch` | `start` / `stop` 写入后回读运行状态（`RunState`）持续不符，直到总超时（约 10 秒） |
 | `bad request: <解析异常消息>` | JSON 无法解析 |
+
+> **写入验证**：`set_temp` / `set_humidity` / `set_fan` / `start` / `stop` 均为"写入 → 回读设备寄存器比对 → 不符自动重发"，直到一致才返回 `Ok:true`；因此这些命令可能阻塞至多约 10 秒。读取类命令（`get_status`）与 ramp 启动命令不受此影响。
 
 ---
 

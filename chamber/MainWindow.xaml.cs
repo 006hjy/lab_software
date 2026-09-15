@@ -231,14 +231,33 @@ namespace lab_software
             }
         }
 
-        private void StartButton_Click(object sender, RoutedEventArgs e)
+        private async void StartButton_Click(object sender, RoutedEventArgs e)
         {
-            _serial.WriteRegister(ChamberSerial.AddrRunStop, 1);
+            await SetRunStateVerified(true, StartButton);
         }
 
-        private void StopButton_Click(object sender, RoutedEventArgs e)
+        private async void StopButton_Click(object sender, RoutedEventArgs e)
         {
-            _serial.WriteRegister(ChamberSerial.AddrRunStop, 0);
+            await SetRunStateVerified(false, StopButton);
+        }
+
+        /// <summary>后台执行"写入启停+回读验证+不符重发"，避免阻塞 UI。</summary>
+        private async Task SetRunStateVerified(bool run, Button button)
+        {
+            button.IsEnabled = false;
+            bool verified;
+            try
+            {
+                verified = await Task.Run(() => _serial.WriteRunStateVerified(run));
+            }
+            finally
+            {
+                button.IsEnabled = _connected;
+            }
+            if (!verified)
+            {
+                ShowInputError((run ? "Start" : "Stop") + " failed: device did not confirm the run state.");
+            }
         }
 
         // ================= Linear ramp (temperature / humidity) =================
@@ -929,7 +948,11 @@ namespace lab_software
                         {
                             return ser.Serialize(new PipeResponse { Ok = false, Error = "not connected" });
                         }
-                        _serial.WriteRegister(ChamberSerial.AddrRunStop, 1);
+                        // 写入并回读验证运行状态，不符自动重发，直到一致或超时。
+                        if (!_serial.WriteRunStateVerified(true))
+                        {
+                            return ser.Serialize(new PipeResponse { Ok = false, Error = "verify failed: run state readback mismatch" });
+                        }
                         return ser.Serialize(new PipeResponse { Ok = true });
 
                     case "stop":
@@ -937,7 +960,10 @@ namespace lab_software
                         {
                             return ser.Serialize(new PipeResponse { Ok = false, Error = "not connected" });
                         }
-                        _serial.WriteRegister(ChamberSerial.AddrRunStop, 0);
+                        if (!_serial.WriteRunStateVerified(false))
+                        {
+                            return ser.Serialize(new PipeResponse { Ok = false, Error = "verify failed: run state readback mismatch" });
+                        }
                         return ser.Serialize(new PipeResponse { Ok = true });
 
                     case "start_temp_ramp":
