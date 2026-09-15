@@ -164,7 +164,7 @@ namespace lab_software
             }
         }
 
-        private void SetTempButton_Click(object sender, RoutedEventArgs e)
+        private async void SetTempButton_Click(object sender, RoutedEventArgs e)
         {
             double temp;
             if (!TryParseDouble(SetTempTextBox.Text, out temp))
@@ -181,12 +181,24 @@ namespace lab_software
             // A manual temperature set cancels any running temperature ramp.
             StopTempRamp();
 
-            // Temperature is transmitted as value × 10, signed 16-bit.
-            short regValue = (short)Math.Round(temp * 10.0);
-            _serial.WriteRegister(ChamberSerial.AddrSetTemp, regValue);
+            // 后台执行"写入+回读验证+不符重发"，避免阻塞 UI。
+            SetTempButton.IsEnabled = false;
+            bool verified;
+            try
+            {
+                verified = await Task.Run(() => _serial.WriteSetpointVerified(ChamberSerial.AddrSetTemp, temp));
+            }
+            finally
+            {
+                SetTempButton.IsEnabled = _connected;
+            }
+            if (!verified)
+            {
+                ShowInputError("Temperature set failed: device did not confirm the setpoint.");
+            }
         }
 
-        private void SetHumidityButton_Click(object sender, RoutedEventArgs e)
+        private async void SetHumidityButton_Click(object sender, RoutedEventArgs e)
         {
             double humidity;
             if (!TryParseDouble(SetHumidityTextBox.Text, out humidity))
@@ -203,9 +215,20 @@ namespace lab_software
             // A manual humidity set cancels any running humidity ramp.
             StopHumRamp();
 
-            // Humidity is transmitted as value × 10.
-            short regValue = (short)Math.Round(humidity * 10.0);
-            _serial.WriteRegister(ChamberSerial.AddrSetHumidity, regValue);
+            SetHumidityButton.IsEnabled = false;
+            bool verified;
+            try
+            {
+                verified = await Task.Run(() => _serial.WriteSetpointVerified(ChamberSerial.AddrSetHumidity, humidity));
+            }
+            finally
+            {
+                SetHumidityButton.IsEnabled = _connected;
+            }
+            if (!verified)
+            {
+                ShowInputError("Humidity set failed: device did not confirm the setpoint.");
+            }
         }
 
         private void StartButton_Click(object sender, RoutedEventArgs e)
@@ -877,7 +900,11 @@ namespace lab_software
                         }
                         // A manual temperature set cancels any running temperature ramp.
                         StopTempRamp();
-                        _serial.WriteRegister(ChamberSerial.AddrSetTemp, RoundReg(req.Value));
+                        // 写入并回读验证，不符自动重发，直到一致或超时。
+                        if (!_serial.WriteSetpointVerified(ChamberSerial.AddrSetTemp, req.Value))
+                        {
+                            return ser.Serialize(new PipeResponse { Ok = false, Error = "verify failed: setpoint readback mismatch" });
+                        }
                         return ser.Serialize(new PipeResponse { Ok = true });
 
                     case "set_humidity":
@@ -891,7 +918,10 @@ namespace lab_software
                         }
                         // A manual humidity set cancels any running humidity ramp.
                         StopHumRamp();
-                        _serial.WriteRegister(ChamberSerial.AddrSetHumidity, RoundReg(req.Value));
+                        if (!_serial.WriteSetpointVerified(ChamberSerial.AddrSetHumidity, req.Value))
+                        {
+                            return ser.Serialize(new PipeResponse { Ok = false, Error = "verify failed: setpoint readback mismatch" });
+                        }
                         return ser.Serialize(new PipeResponse { Ok = true });
 
                     case "start":

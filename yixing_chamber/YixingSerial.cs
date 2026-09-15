@@ -40,6 +40,11 @@ namespace yixing_chamber
         private const int ReconnectDelayMs = 2000;
         private const int ProbeTimeoutMs = 500;
 
+        // ---- 设定温度回读验证（写入 → 回读设定寄存器 → 不符重发）----
+        private const double SetVerifyTolerance = 0.051;      // 寄存器回读按 0.1 量化，半格+ε
+        private const int SetVerifyRetryIntervalMs = 500;     // 每次写入后等待回读的时间
+        private const int SetVerifyTimeoutMs = 10000;         // 验证总超时，超时仍未符则报失败
+
         // 读运行状态：01 01 04 B0 00 01 FD 1D
         private static readonly byte[] ProbeCommand =
             { 0x01, 0x01, 0x04, 0xB0, 0x00, 0x01, 0xFD, 0x1D };
@@ -91,6 +96,58 @@ namespace yixing_chamber
         public bool WriteSetTemp(double temp)
         {
             return WriteFrame(FuncWriteSingle, AddrSetTemp, (ushort)Math.Round(temp * 10.0));
+        }
+
+        /// <summary>
+        /// 写入设定温度并回读验证：写入后等待一个短间隔，回读设定温度寄存器，
+        /// 与目标值（0.1 量化）不符则重发写入命令，直到一致或总超时。
+        /// 返回是否最终验证成功；串口不可用时立即返回 false。
+        /// </summary>
+        public bool WriteSetTempVerified(double temp)
+        {
+            int deadline = Environment.TickCount + SetVerifyTimeoutMs;
+            while (Environment.TickCount < deadline)
+            {
+                if (!WriteSetTemp(temp))
+                {
+                    return false;
+                }
+                Thread.Sleep(SetVerifyRetryIntervalMs);
+                double readback;
+                if (TryReadSetTemp(out readback) && Math.Abs(readback - temp) <= SetVerifyTolerance)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>直接回读设定温度寄存器（与轮询同一地址、共用 _ioLock）。</summary>
+        private bool TryReadSetTemp(out double temp)
+        {
+            temp = 0;
+            lock (_ioLock)
+            {
+                SerialPort port = _port;
+                if (port == null || !port.IsOpen)
+                {
+                    return false;
+                }
+                try
+                {
+                    byte[] frame = Query(port, FuncReadHolding, 0x02, 7, AddrSetTemp);
+                    if (frame == null)
+                    {
+                        return false;
+                    }
+                    temp = (short)((frame[3] << 8) | frame[4]) / 10.0;
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
         }
 
         /// <summary>开始运行。</summary>

@@ -38,6 +38,11 @@ namespace lab_software
         private const int ReconnectDelayMs = 2000;
         private const int ProbeTimeoutMs = 500;
 
+        // ---- 设定值回读验证（写入 → 回读状态帧中的 Tgt 值 → 不符重发）----
+        private const double SetVerifyTolerance = 0.051;      // 寄存器回读按 0.1 量化，半格+ε
+        private const int SetVerifyRetryIntervalMs = 500;     // 每次写入后等待回读的时间
+        private const int SetVerifyTimeoutMs = 10000;         // 验证总超时，超时仍未符则报失败
+
         private static readonly byte[] ProbeCommand =
             { 0x01, 0x03, 0x00, 0x0A, 0x00, 0x34, 0x64, 0x1F };
 
@@ -105,6 +110,78 @@ namespace lab_software
                 {
                     byte[] frame = BuildWriteFrame(register, value);
                     port.Write(frame, 0, frame.Length);
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Write the target temperature (<paramref name="register"/> = AddrSetTemp)
+        /// or humidity (AddrSetHumidity) setpoint and verify by reading the device
+        /// status frame back: resend until the read-back target matches the set
+        /// value (0.1-quantized register, half-step + ε) or the total timeout hits.
+        /// Returns false when verified mismatch persists or the port is unusable.
+        /// </summary>
+        public bool WriteSetpointVerified(ushort register, double value)
+        {
+            short reg = (short)Math.Round(value * 10.0);
+            int deadline = Environment.TickCount + SetVerifyTimeoutMs;
+            while (Environment.TickCount < deadline)
+            {
+                if (!WriteRegister(register, reg))
+                {
+                    return false;
+                }
+                Thread.Sleep(SetVerifyRetryIntervalMs);
+                double tgtTemp, tgtHum;
+                if (TryReadSetpoints(out tgtTemp, out tgtHum))
+                {
+                    double readback = register == AddrSetTemp ? tgtTemp : tgtHum;
+                    if (Math.Abs(readback - value) <= SetVerifyTolerance)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Synchronously read the target temperature/humidity from the status
+        /// frame (same command/parse as the poll loop, shares _ioLock).
+        /// </summary>
+        public bool TryReadSetpoints(out double tgtTemp, out double tgtHum)
+        {
+            tgtTemp = 0;
+            tgtHum = 0;
+            lock (_ioLock)
+            {
+                SerialPort port = _port;
+                if (port == null || !port.IsOpen)
+                {
+                    return false;
+                }
+                try
+                {
+                    port.Write(ProbeCommand, 0, ProbeCommand.Length);
+                    byte[] data = ReceiveResponse(port, ReadResponseTimeoutMs);
+                    if (data == null || data.Length < StatusFrameLength || !IsValidStatusFrame(data))
+                    {
+                        return false;
+                    }
+                    var frame = new byte[StatusFrameLength];
+                    Array.Copy(data, data.Length - StatusFrameLength, frame, 0, StatusFrameLength);
+                    ChamberStatus status;
+                    if (!TryParse(frame, out status))
+                    {
+                        return false;
+                    }
+                    tgtTemp = status.TgtTemp;
+                    tgtHum = status.TgtHum;
                     return true;
                 }
                 catch

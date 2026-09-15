@@ -33,9 +33,6 @@ namespace task_manager
         /// <summary>Poll interval used by wait-for-condition tasks, ms.</summary>
         private const int WaitPollMs = 1000;
 
-        /// <summary>Tolerance for comparing set temp/humidity against the 0.1-quantized register readback.</summary>
-        private const double SetVerifyTolerance = 0.051;
-
         // ---- Task list ----
         private readonly List<TaskItem> _tasks = new List<TaskItem>();
 
@@ -1044,10 +1041,18 @@ namespace task_manager
                     }
 
                     case TaskType.ChamberSetTemp:
-                        return SetChamberTargetAndVerify(true, t.Value);
+                    {
+                        string ch = _runChamberPipe;
+                        string e1 = PipeAction(ch, "{\"cmd\":\"set_temp\",\"value\":" + JsonNum(t.Value) + "}");
+                        return e1 != null ? "set_temp: " + e1 : null;
+                    }
 
                     case TaskType.ChamberSetHumidity:
-                        return SetChamberTargetAndVerify(false, t.Value);
+                    {
+                        string ch = _runChamberPipe;
+                        string e1 = PipeAction(ch, "{\"cmd\":\"set_humidity\",\"value\":" + JsonNum(t.Value) + "}");
+                        return e1 != null ? "set_humidity: " + e1 : null;
+                    }
 
                     case TaskType.ChamberStart:
                     {
@@ -1105,54 +1110,11 @@ namespace task_manager
             }
         }
 
-        /// <summary>
-        /// Send set_temp / set_humidity, then verify via get_status that the chamber's target
-        /// temperature/humidity (TgtTemp / TgtHum, read back from the device at 0.1 resolution)
-        /// equals the set value. Resend the set command until it matches, or the task is stopped.
-        /// </summary>
-        private string SetChamberTargetAndVerify(bool isTemp, double value)
-        {
-            string ch = _runChamberPipe;
-            string cmd = isTemp ? "set_temp" : "set_humidity";
-            string key = isTemp ? "TgtTemp" : "TgtHum";
-
-            while (!_stopRequested)
-            {
-                string err = PipeAction(ch, "{\"cmd\":\"" + cmd + "\",\"value\":" + JsonNum(value) + "}");
-                if (err != null)
-                {
-                    return cmd + ": " + err;
-                }
-
-                WaitWithStop(WaitPollMs);
-                if (_stopRequested)
-                {
-                    return null;
-                }
-
-                double tgt;
-                string rerr = ReadChamberValue(ch, key, out tgt);
-                if (rerr != null)
-                {
-                    return rerr;
-                }
-
-                if (Math.Abs(tgt - value) <= SetVerifyTolerance)
-                {
-                    return null;
-                }
-
-                UpdateStatus("Task " + (_currentIndex + 1) + "/" + _tasks.Count
-                    + ": " + cmd + " retry (readback " + F(tgt) + " != " + F(value) + ")");
-            }
-            return null; // stopped
-        }
-
         /// <summary>Wait for the chamber temperature/humidity condition, polling get_status.</summary>
         private string WaitForCondition(string what, TaskItem t, double target, double tol)
         {
             string ch = _runChamberPipe;
-            string key = what == "temp" ? "CurTemp" : "CurHum";
+            bool isTemp = what == "temp";
 
             long timeoutMs = t.TimeoutSeconds > 0 ? (long)(t.TimeoutSeconds * 1000) : -1;
             long deadline = timeoutMs > 0 ? Environment.TickCount + timeoutMs : long.MaxValue;
@@ -1165,7 +1127,7 @@ namespace task_manager
                 }
 
                 double val;
-                string err = ReadChamberValue(ch, key, out val);
+                string err = ReadChamberValue(ch, isTemp, out val);
                 if (err != null)
                 {
                     return err;
@@ -1181,8 +1143,8 @@ namespace task_manager
             return null; // stopped
         }
 
-        /// <summary>Read one numeric status field (CurTemp/CurHum/TgtTemp/TgtHum) via get_status.</summary>
-        private static string ReadChamberValue(string pipeName, string key, out double value)
+        /// <summary>Read the current chamber temperature or humidity via get_status.</summary>
+        private static string ReadChamberValue(string pipeName, bool isTemp, out double value)
         {
             value = 0;
             string resp = PipeRequest(pipeName, "{\"cmd\":\"get_status\"}");
@@ -1192,6 +1154,7 @@ namespace task_manager
                 string err = obj != null && obj.ContainsKey("Error") ? (obj["Error"] as string ?? "unknown") : "unknown error";
                 return "get_status: " + err;
             }
+            string key = isTemp ? "CurTemp" : "CurHum";
             if (!obj.ContainsKey(key))
             {
                 return "get_status: missing field " + key;

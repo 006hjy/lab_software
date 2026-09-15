@@ -32,6 +32,11 @@ namespace alicat_mfc
         /// <summary>Poll interval in milliseconds.</summary>
         private const int PollIntervalMs = 1000;
 
+        // ---- 设定流量回读验证（写入 → 等待轮询回读 Setpoint → 不符重发）----
+        private const double SetVerifyTolerance = 0.02;       // SCCM；写入量化 1/128≈0.008，覆盖回读显示误差
+        private const int SetVerifyRetryWindowMs = 1500;      // 单次写入后等待 1s 周期状态轮询回读的窗口
+        private const int SetVerifyTimeoutMs = 10000;         // 验证总超时，超时仍未符则报失败
+
         /// <summary>Gap between commands to different addresses on the same port.</summary>
         private const int InterCommandGapMs = 30;
 
@@ -710,6 +715,8 @@ namespace alicat_mfc
                 ? string.Join(" ", parts, 6, parts.Length - 6)
                 : "";
             dev.HasStatus = true;
+            // 时间戳最后写入（Interlocked 兼作内存屏障）：读方看到新 tick 即可见完整 Setpoint。
+            Interlocked.Exchange(ref dev.LastStatusTick, Environment.TickCount);
 
             Dispatcher.BeginInvoke((Action)(() => UpdateDeviceUi(dev.Index)));
         }
@@ -751,7 +758,7 @@ namespace alicat_mfc
 
         // ================= Control commands =================
 
-        private void SetFlowButton_Click(object sender, RoutedEventArgs e)
+        private async void SetFlowButton_Click(object sender, RoutedEventArgs e)
         {
             int index = ReferenceEquals(sender, SetFlowButton1) ? 0 : 1;
             TextBox tb = index == 0 ? FlowTextBox1 : FlowTextBox2;
@@ -766,7 +773,23 @@ namespace alicat_mfc
                 ShowInputError("Flow must be between 0 and 500 SCCM.");
                 return;
             }
-            SendSetFlow(_devices[index], value);
+
+            // 后台执行"写入+回读验证+不符重发"，避免阻塞 UI。
+            Button btn = (Button)sender;
+            btn.IsEnabled = false;
+            bool verified;
+            try
+            {
+                verified = await Task.Run(() => SendSetFlowVerified(_devices[index], value));
+            }
+            finally
+            {
+                btn.IsEnabled = _uiConnected;
+            }
+            if (!verified)
+            {
+                ShowInputError("Flow set failed: device did not confirm the setpoint.");
+            }
         }
 
         private void SetGasButton_Click(object sender, RoutedEventArgs e)
@@ -782,15 +805,30 @@ namespace alicat_mfc
             SendSetGas(_devices[index], gas);
         }
 
-        private void ZeroButton_Click(object sender, RoutedEventArgs e)
+        private async void ZeroButton_Click(object sender, RoutedEventArgs e)
         {
             int index = ReferenceEquals(sender, ZeroButton1) ? 0 : 1;
-            SendSetFlow(_devices[index], 0.0);
+
+            Button btn = (Button)sender;
+            btn.IsEnabled = false;
+            bool verified;
+            try
+            {
+                verified = await Task.Run(() => SendSetFlowVerified(_devices[index], 0.0));
+            }
+            finally
+            {
+                btn.IsEnabled = _uiConnected;
+            }
+            if (!verified)
+            {
+                ShowInputError("Zero failed: device did not confirm the setpoint.");
+            }
         }
 
         // ================= Gas mixing =================
 
-        private void SetGasMixingButton_Click(object sender, RoutedEventArgs e)
+        private async void SetGasMixingButton_Click(object sender, RoutedEventArgs e)
         {
             double sourceConc, totalFlow, targetConc;
             if (!double.TryParse(SourceConcTextBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out sourceConc))
@@ -827,7 +865,23 @@ namespace alicat_mfc
             }
 
             SaveConfig();
-            ApplyMixIfReadyAndNotify();
+
+            // 后台执行两路"写入+回读验证+不符重发"，避免阻塞 UI。
+            SetGasMixingButton.IsEnabled = false;
+            bool ok;
+            string applyError = null;
+            try
+            {
+                ok = await Task.Run(() => ApplyMixIfReady(out applyError));
+            }
+            finally
+            {
+                SetGasMixingButton.IsEnabled = _uiConnected;
+            }
+            if (!ok)
+            {
+                ShowInputError(applyError ?? "Gas mixing failed: device did not confirm the setpoints.");
+            }
         }
 
         /// <summary>Validate and store the source gas concentration (1..1000000).</summary>
@@ -950,27 +1004,58 @@ namespace alicat_mfc
                 return false;
             }
 
-            SendSetFlow(targetDev, targetFlow);
-            SendSetFlow(bgDev, backgroundFlow);
+            if (!SendSetFlowVerified(targetDev, targetFlow))
+            {
+                error = "target setpoint not confirmed by device";
+                return false;
+            }
+            if (!SendSetFlowVerified(bgDev, backgroundFlow))
+            {
+                error = "background setpoint not confirmed by device";
+                return false;
+            }
             return true;
         }
 
-        /// <summary>Apply the mix if ready and surface any error to the UI.</summary>
-        private void ApplyMixIfReadyAndNotify()
+        /// <summary>Flow setpoint: value × 128, rounded, sent as decimal ASCII.</summary>
+        private bool SendSetFlow(MfcDevice dev, double sccm)
         {
-            string error;
-            if (!ApplyMixIfReady(out error))
-            {
-                ShowInputError(error);
-            }
+            if (dev == null || dev.Channel == null) return false;
+            long scaled = (long)Math.Round(sccm * 128.0);
+            return WriteToDevice(dev, dev.Address + " " + scaled.ToString(CultureInfo.InvariantCulture) + "\r\r");
         }
 
-        /// <summary>Flow setpoint: value × 128, rounded, sent as decimal ASCII.</summary>
-        private void SendSetFlow(MfcDevice dev, double sccm)
+        /// <summary>
+        /// 写入设定流量并回读验证：每次写入后等待晚于写入时刻的状态帧轮询回读，
+        /// 比较设备 Setpoint 与目标值；不符则重发，直到一致或总超时（最坏约 10s）。
+        /// 会阻塞调用线程；UI 线程请经 Task.Run 调用。
+        /// </summary>
+        private bool SendSetFlowVerified(MfcDevice dev, double sccm)
         {
-            if (dev == null || dev.Channel == null) return;
-            long scaled = (long)Math.Round(sccm * 128.0);
-            WriteToDevice(dev, dev.Address + " " + scaled.ToString(CultureInfo.InvariantCulture) + "\r\r");
+            if (dev == null || dev.Channel == null) return false;
+
+            int start = Environment.TickCount;
+            while (Environment.TickCount - start < SetVerifyTimeoutMs)
+            {
+                int writeTick = Environment.TickCount;
+                if (!SendSetFlow(dev, sccm))
+                {
+                    return false;
+                }
+
+                while (Environment.TickCount - writeTick < SetVerifyRetryWindowMs)
+                {
+                    if (Interlocked.Read(ref dev.LastStatusTick) - writeTick >= 0
+                        && dev.HasStatus
+                        && Math.Abs(dev.Setpoint - sccm) <= SetVerifyTolerance)
+                    {
+                        return true;
+                    }
+                    Thread.Sleep(50);
+                }
+                // 本窗口内回读仍不符 → 重发
+            }
+            return false;
         }
 
         /// <summary>Gas number: {addr}G {number}\r</summary>
@@ -980,10 +1065,10 @@ namespace alicat_mfc
             WriteToDevice(dev, dev.Address + "G " + gas.ToString(CultureInfo.InvariantCulture) + "\r");
         }
 
-        private void WriteToDevice(MfcDevice dev, string command)
+        private bool WriteToDevice(MfcDevice dev, string command)
         {
             MfcChannel ch = dev.Channel;
-            if (ch == null || ch.Port == null || !ch.Port.IsOpen) return;
+            if (ch == null || ch.Port == null || !ch.Port.IsOpen) return false;
             try
             {
                 byte[] bytes = Encoding.ASCII.GetBytes(command);
@@ -991,10 +1076,12 @@ namespace alicat_mfc
                 {
                     ch.Port.Write(bytes, 0, bytes.Length);
                 }
+                return true;
             }
             catch
             {
                 RaiseSerialError("Serial connection lost");
+                return false;
             }
         }
 
@@ -1002,6 +1089,9 @@ namespace alicat_mfc
 
         /// <summary>Prevents recursive UI syncing while a radio change propagates to the other device.</summary>
         private bool _updatingRoles;
+
+        /// <summary>UI 连接状态镜像，供异步验证写操作完成后恢复按钮可用状态。</summary>
+        private volatile bool _uiConnected;
 
         /// <summary>
         /// The two devices always have complementary roles: exactly one is
@@ -1370,6 +1460,7 @@ namespace alicat_mfc
 
         private void UpdateConnectedUi(bool connected)
         {
+            _uiConnected = connected;
             ConnectButton.Content = connected ? "Disconnect" : "Connect";
             PortComboBox1.IsEnabled = !connected;
             PortComboBox2.IsEnabled = !connected;
@@ -1641,7 +1732,11 @@ namespace alicat_mfc
                         {
                             return ser.Serialize(new PipeResponse { Ok = false, Error = "unknown role: " + req.Role });
                         }
-                        SendSetFlow(dev, req.Value);
+                        // 写入并回读验证，不符自动重发，直到一致或超时。
+                        if (!SendSetFlowVerified(dev, req.Value))
+                        {
+                            return ser.Serialize(new PipeResponse { Ok = false, Error = "verify failed: setpoint readback mismatch" });
+                        }
                         return ser.Serialize(new PipeResponse { Ok = true });
                     }
 
@@ -1810,6 +1905,9 @@ namespace alicat_mfc
         public double Setpoint { get; set; }
         public string GasName { get; set; }
         public bool HasStatus { get; set; }
+
+        /// <summary>最近一次从设备状态帧刷新 Setpoint 的时刻（Environment.TickCount），经 Interlocked 读写。</summary>
+        public long LastStatusTick;
     }
 
     /// <summary>

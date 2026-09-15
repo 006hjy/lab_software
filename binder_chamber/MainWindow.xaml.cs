@@ -48,6 +48,11 @@ namespace binder_chamber
         /// <summary>Read/write timeout in milliseconds for TCP commands.</summary>
         private const int TcpTimeoutMs = 1000;
 
+        // ---- 设定值回读验证（写入 → 回读 set-point 读寄存器 → 不符重发）----
+        private const double SetVerifyTolerance = 0.051;      // 半格+ε
+        private const int SetVerifyRetryIntervalMs = 500;     // 每次写入后等待回读的时间
+        private const int SetVerifyTimeoutMs = 10000;         // 验证总超时，超时仍未符则报失败
+
         /// <summary>Connected TCP client and its stream.</summary>
         private TcpClient _tcpClient;
         private NetworkStream _stream;
@@ -187,7 +192,7 @@ namespace binder_chamber
             ResetDisplay();
         }
 
-        private void SetTempButton_Click(object sender, RoutedEventArgs e)
+        private async void SetTempButton_Click(object sender, RoutedEventArgs e)
         {
             double temp;
             if (!TryParseDouble(SetTempTextBox.Text, out temp))
@@ -204,10 +209,24 @@ namespace binder_chamber
             // A manual temperature set cancels any running temperature ramp.
             StopTempRamp();
 
-            WriteFloat(RegTempSpManual, temp);
+            // 后台执行"写入+回读验证+不符重发"，避免阻塞 UI。
+            SetTempButton.IsEnabled = false;
+            bool verified;
+            try
+            {
+                verified = await Task.Run(() => WriteFloatVerified(RegTempSpManual, RegTempSpRead, temp));
+            }
+            finally
+            {
+                SetTempButton.IsEnabled = _connected;
+            }
+            if (!verified)
+            {
+                ShowInputError("Temperature set failed: device did not confirm the setpoint.");
+            }
         }
 
-        private void SetHumidityButton_Click(object sender, RoutedEventArgs e)
+        private async void SetHumidityButton_Click(object sender, RoutedEventArgs e)
         {
             double humidity;
             if (!TryParseDouble(SetHumidityTextBox.Text, out humidity))
@@ -224,10 +243,23 @@ namespace binder_chamber
             // A manual humidity set cancels any running humidity ramp.
             StopHumRamp();
 
-            WriteFloat(RegHumSpManual, humidity);
+            SetHumidityButton.IsEnabled = false;
+            bool verified;
+            try
+            {
+                verified = await Task.Run(() => WriteFloatVerified(RegHumSpManual, RegHumSpRead, humidity));
+            }
+            finally
+            {
+                SetHumidityButton.IsEnabled = _connected;
+            }
+            if (!verified)
+            {
+                ShowInputError("Humidity set failed: device did not confirm the setpoint.");
+            }
         }
 
-        private void SetFanButton_Click(object sender, RoutedEventArgs e)
+        private async void SetFanButton_Click(object sender, RoutedEventArgs e)
         {
             double fan;
             if (!TryParseDouble(SetFanTextBox.Text, out fan))
@@ -241,7 +273,20 @@ namespace binder_chamber
                 return;
             }
 
-            WriteFloat(RegFanSpManual, fan);
+            SetFanButton.IsEnabled = false;
+            bool verified;
+            try
+            {
+                verified = await Task.Run(() => WriteFloatVerified(RegFanSpManual, RegFanSpRead, fan));
+            }
+            finally
+            {
+                SetFanButton.IsEnabled = _connected;
+            }
+            if (!verified)
+            {
+                ShowInputError("Fan speed set failed: device did not confirm the setpoint.");
+            }
         }
 
         private void StartButton_Click(object sender, RoutedEventArgs e)
@@ -613,6 +658,30 @@ namespace binder_chamber
                 Dispatcher.BeginInvoke((Action)HandleConnectionError);
                 return null;
             }
+        }
+
+        /// <summary>
+        /// 写入设定值（温度/湿度/风机）并回读验证：写入手动设定寄存器后，
+        /// 回读对应的 set-point 读寄存器，不符则重发，直到一致或总超时。
+        /// 调用方线程会阻塞（正常约 0.5s，最坏 10s），UI 线程请经 Task.Run 调用。
+        /// </summary>
+        private bool WriteFloatVerified(ushort writeReg, ushort readReg, double value)
+        {
+            int deadline = Environment.TickCount + SetVerifyTimeoutMs;
+            while (Environment.TickCount < deadline)
+            {
+                if (!WriteFloat(writeReg, value))
+                {
+                    return false;
+                }
+                Thread.Sleep(SetVerifyRetryIntervalMs);
+                double? readback = ReadFloat(readReg);
+                if (readback.HasValue && Math.Abs(readback.Value - value) <= SetVerifyTolerance)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>读保持寄存器（功能码 0x03），返回数据字节。</summary>
@@ -1151,7 +1220,11 @@ namespace binder_chamber
                         }
                         // A manual temperature set cancels any running temperature ramp.
                         StopTempRamp();
-                        WriteFloat(RegTempSpManual, req.Value);
+                        // 写入并回读验证，不符自动重发，直到一致或超时。
+                        if (!WriteFloatVerified(RegTempSpManual, RegTempSpRead, req.Value))
+                        {
+                            return ser.Serialize(new PipeResponse { Ok = false, Error = "verify failed: setpoint readback mismatch" });
+                        }
                         return ser.Serialize(new PipeResponse { Ok = true });
 
                     case "set_humidity":
@@ -1165,7 +1238,10 @@ namespace binder_chamber
                         }
                         // A manual humidity set cancels any running humidity ramp.
                         StopHumRamp();
-                        WriteFloat(RegHumSpManual, req.Value);
+                        if (!WriteFloatVerified(RegHumSpManual, RegHumSpRead, req.Value))
+                        {
+                            return ser.Serialize(new PipeResponse { Ok = false, Error = "verify failed: setpoint readback mismatch" });
+                        }
                         return ser.Serialize(new PipeResponse { Ok = true });
 
                     case "set_fan":
@@ -1177,7 +1253,10 @@ namespace binder_chamber
                         {
                             return ser.Serialize(new PipeResponse { Ok = false, Error = "Fan speed must be between 30 and 100 %." });
                         }
-                        WriteFloat(RegFanSpManual, req.Value);
+                        if (!WriteFloatVerified(RegFanSpManual, RegFanSpRead, req.Value))
+                        {
+                            return ser.Serialize(new PipeResponse { Ok = false, Error = "verify failed: setpoint readback mismatch" });
+                        }
                         return ser.Serialize(new PipeResponse { Ok = true });
 
                     case "start":

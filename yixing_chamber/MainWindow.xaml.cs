@@ -156,7 +156,7 @@ namespace yixing_chamber
             }
         }
 
-        private void SetTempButton_Click(object sender, RoutedEventArgs e)
+        private async void SetTempButton_Click(object sender, RoutedEventArgs e)
         {
             double temp;
             if (!TryParseDouble(SetTempTextBox.Text, out temp))
@@ -172,7 +172,22 @@ namespace yixing_chamber
 
             // 手动设定温度会取消正在运行的温度 ramp。
             StopTempRamp();
-            _serial.WriteSetTemp(temp);
+
+            // 后台执行"写入+回读验证+不符重发"，避免阻塞 UI。
+            SetTempButton.IsEnabled = false;
+            bool verified;
+            try
+            {
+                verified = await Task.Run(() => _serial.WriteSetTempVerified(temp));
+            }
+            finally
+            {
+                SetTempButton.IsEnabled = _connected;
+            }
+            if (!verified)
+            {
+                ShowInputError("Temperature set failed: device did not confirm the setpoint.");
+            }
         }
 
         private void StartButton_Click(object sender, RoutedEventArgs e)
@@ -634,7 +649,11 @@ namespace yixing_chamber
                             return ser.Serialize(new PipeResponse { Ok = false, Error = "Temperature must be between -40.0 and 150.0 °C." });
                         }
                         StopTempRamp();
-                        _serial.WriteSetTemp(req.Value);
+                        // 写入并回读验证，不符自动重发，直到一致或超时。
+                        if (!_serial.WriteSetTempVerified(req.Value))
+                        {
+                            return ser.Serialize(new PipeResponse { Ok = false, Error = "verify failed: setpoint readback mismatch" });
+                        }
                         return ser.Serialize(new PipeResponse { Ok = true });
 
                     case "start":
