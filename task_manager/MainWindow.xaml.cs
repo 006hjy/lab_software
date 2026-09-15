@@ -50,10 +50,17 @@ namespace task_manager
         private Thread _runnerThread;
         private volatile bool _stopRequested;
         private volatile bool _running;
+
+        /// <summary>暂停标志：仅对正在执行的 Wait seconds 任务生效。</summary>
+        private volatile bool _paused;
+
+        /// <summary>当前任务线程是否正处于 Wait seconds 的等待中（Pause 按钮可用条件）。</summary>
+        private volatile bool _waitingActive;
+
         private int _currentIndex = -1;
         private readonly object _statusLock = new object();
 
-        /// <summary>Stop 按钮右侧的状态文字（get_status 的 Running 字段）。</summary>
+        /// <summary>窗口底部状态栏文字（get_status 的 Running 字段）。</summary>
         private volatile string _statusText = "";
 
         /// <summary>当前 MFC 管道名（实时跟随文本框）。</summary>
@@ -905,6 +912,8 @@ namespace task_manager
             _runRepeatCount = repeat;
 
             _stopRequested = false;
+            _paused = false;
+            _waitingActive = false;
             _running = true;
             StartButton.IsEnabled = false;
             StopButton.IsEnabled = true;
@@ -924,6 +933,13 @@ namespace task_manager
         {
             _stopRequested = true;
             UpdateStatus("Stopping...");
+        }
+
+        /// <summary>暂停/恢复当前的 Wait seconds 任务（仅等待期间按钮可用）。</summary>
+        private void OnPauseClicked(object sender, RoutedEventArgs e)
+        {
+            _paused = !_paused;
+            PauseButton.Content = _paused ? "Resume" : "Pause";
         }
 
         private void RunTaskList()
@@ -1029,33 +1045,67 @@ namespace task_manager
                     case TaskType.WaitSeconds:
                     {
                         int totalMs = (int)(t.Seconds * 1000);
-                        long startTick = Environment.TickCount;
+                        _waitingActive = true;
+                        int startTick = Environment.TickCount;
+                        int pauseAccumMs = 0;      // 累计暂停时长，不计入等待时间
+                        int pauseStartTick = -1;
                         int lastBeepSecond = -1;
-                        WaitWithStop(totalMs, remainingMs =>
+                        try
                         {
-                            double elapsedSeconds = Math.Floor((Environment.TickCount - startTick) / 1000.0);
-                            UpdateStatus("Task " + (_currentIndex + 1) + "/" + _tasks.Count
-                                + ": waiting... " + F(elapsedSeconds) + "s");
-
-                            // Beep once per second during the last N seconds.
-                            if (t.BeepSeconds > 0)
+                            while (!_stopRequested)
                             {
-                                double elapsedSec = (Environment.TickCount - startTick) / 1000.0;
-                                if (elapsedSec >= t.Seconds - t.BeepSeconds)
+                                int now = Environment.TickCount;
+                                if (_paused)
                                 {
-                                    int sec = (int)Math.Floor(elapsedSec);
-                                    if (sec != lastBeepSecond)
+                                    if (pauseStartTick < 0)
                                     {
-                                        lastBeepSecond = sec;
-                                        try
-                                        {
-                                            Beep(1000, 200); // 1 kHz, 200 ms
-                                        }
-                                        catch { }
+                                        pauseStartTick = now;
                                     }
                                 }
+                                else if (pauseStartTick >= 0)
+                                {
+                                    pauseAccumMs += now - pauseStartTick;
+                                    pauseStartTick = -1;
+                                }
+
+                                int elapsedMs = unchecked(now - startTick - pauseAccumMs);
+                                if (elapsedMs >= totalMs)
+                                {
+                                    break;
+                                }
+
+                                bool isPaused = pauseStartTick >= 0;
+                                double elapsedSeconds = Math.Floor(elapsedMs / 1000.0);
+                                UpdateStatus("Task " + (_currentIndex + 1) + "/" + _tasks.Count
+                                    + (isPaused ? ": paused... " : ": waiting... ") + F(elapsedSeconds) + "s");
+
+                                // Beep once per second during the last N seconds (not while paused).
+                                if (t.BeepSeconds > 0 && !isPaused)
+                                {
+                                    double elapsedSec = elapsedMs / 1000.0;
+                                    if (elapsedSec >= t.Seconds - t.BeepSeconds)
+                                    {
+                                        int sec = (int)Math.Floor(elapsedSec);
+                                        if (sec != lastBeepSecond)
+                                        {
+                                            lastBeepSecond = sec;
+                                            try
+                                            {
+                                                Beep(1000, 200); // 1 kHz, 200 ms
+                                            }
+                                            catch { }
+                                        }
+                                    }
+                                }
+
+                                Thread.Sleep(200);
                             }
-                        });
+                        }
+                        finally
+                        {
+                            _waitingActive = false;
+                            _paused = false;
+                        }
                         return null;
                     }
 
@@ -1348,6 +1398,12 @@ namespace task_manager
             {
                 StatusText.Text = status ?? "";
                 _statusText = status ?? "";
+                // Pause 仅在 Wait seconds 等待期间可用；内容随 _paused 切换。
+                if (PauseButton != null)
+                {
+                    PauseButton.IsEnabled = _running && _waitingActive && !_stopRequested;
+                    PauseButton.Content = _paused ? "Resume" : "Pause";
+                }
             }));
         }
 
