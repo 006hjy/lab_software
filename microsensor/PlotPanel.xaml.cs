@@ -58,24 +58,26 @@ namespace microsensor
 
             PlotView.Model = _model;
 
-            // 禁用鼠标中键框选缩放：OxyPlot 默认把中键按下绑定为
+            // 禁用鼠标中键框选缩放：OxyPlot 2.2 默认把中键按下绑定为
             // ZoomRectangle（框选显示范围），这里仅解绑中键手势，
-            // 其余默认操作（左键平移、滚轮缩放等）保持不变。
+            // 其余默认操作（右键拖动平移、左键跟踪、滚轮缩放等）保持不变。
             var controller = new PlotController();
             controller.Unbind(new OxyMouseDownGesture(OxyMouseButton.Middle));
             PlotView.Controller = controller;
 
-            // 滚轮仅缩放 x 轴：隧道阶段拦截，阻止 OxyPlot 默认的双轴缩放
+            // 滚轮仅缩放 x 轴（按住右键时仅缩放 y 轴）：隧道阶段拦截，
+            // 先于 OxyPlot 处理并标记 Handled，阻止其默认的双轴缩放
             PlotView.PreviewMouseWheel += OnPreviewMouseWheel;
 
             ApplyTheme("light");
         }
 
-        /// <summary>滚轮缩放：默认仅缩放 x 轴（时间轴）；按住 Shift 时仅缩放 y 轴。均围绕鼠标位置。</summary>
+        /// <summary>滚轮缩放：默认仅缩放 x 轴（时间轴）；按住鼠标右键时仅缩放 y 轴。均围绕鼠标位置。
+        /// 用右键代替 Shift，单手即可缩放 y 轴。</summary>
         private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
             var position = e.GetPosition(PlotView);
-            bool zoomY = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+            bool zoomY = e.RightButton == MouseButtonState.Pressed;
 
             // 滚轮向上放大（范围缩小），向下缩小（范围扩大）
             double factor = e.Delta > 0 ? 1.0 / 1.15 : 1.15;
