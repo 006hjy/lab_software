@@ -55,23 +55,25 @@ namespace smartsensor
 
             PlotView.Model = _model;
 
-            // 禁用鼠标中键框选缩放，滚轮缩放仅作用于时间轴。
+            // 禁用鼠标中键框选缩放（OxyPlot 2.2 默认中键 = ZoomRectangle）。
+            // 其余默认手势（右键拖动平移、左键跟踪、滚轮缩放）保持不变。
             var controller = new PlotController();
             controller.Unbind(new OxyMouseDownGesture(OxyMouseButton.Middle));
             PlotView.Controller = controller;
 
+            // 滚轮默认仅缩放时间轴（按住右键时仅缩放 y 轴）：
+            // 隧道阶段拦截并标记 Handled，阻止 OxyPlot 默认的双轴缩放。
             PlotView.PreviewMouseWheel += OnPreviewMouseWheel;
         }
 
         /// <summary>
-        /// 滚轮缩放：默认仅缩放 x 轴（时间轴）；按住 Shift 时仅缩放 y 轴。
-        /// 均围绕鼠标位置。
+        /// 滚轮缩放：默认仅缩放 x 轴（时间轴）；按住鼠标右键时仅缩放 y 轴。
+        /// 均围绕鼠标位置；用右键代替 Shift，单手即可缩放 y 轴。
         /// </summary>
         private void OnPreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
         {
             var position = e.GetPosition(PlotView);
-            bool zoomY = (System.Windows.Input.Keyboard.Modifiers
-                & System.Windows.Input.ModifierKeys.Shift) != 0;
+            bool zoomY = e.RightButton == System.Windows.Input.MouseButtonState.Pressed;
 
             double factor = e.Delta > 0 ? 1.0 / 1.15 : 1.15;
 
