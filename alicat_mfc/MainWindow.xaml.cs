@@ -33,7 +33,7 @@ namespace alicat_mfc
         private const int PollIntervalMs = 1000;
 
         // ---- 设定流量回读验证（写入 → 等待轮询回读 Setpoint → 不符重发）----
-        private const double SetVerifyTolerance = 0.02;       // SCCM；写入量化 1/128≈0.008，覆盖回读显示误差
+        private const double SetVerifyTolerance = 0.02;       // SCCM；覆盖回读按两位小数显示的误差
         private const int SetVerifyRetryWindowMs = 1500;      // 单次写入后等待 1s 周期状态轮询回读的窗口
         private const int SetVerifyTimeoutMs = 10000;         // 验证总超时，超时仍未符则报失败
 
@@ -1017,12 +1017,12 @@ namespace alicat_mfc
             return true;
         }
 
-        /// <summary>Flow setpoint: value × 128, rounded, sent as decimal ASCII.</summary>
+        /// <summary>Flow setpoint: {address}S {value}\r\r, sent as decimal ASCII.</summary>
         private bool SendSetFlow(MfcDevice dev, double sccm)
         {
             if (dev == null || dev.Channel == null) return false;
-            long scaled = (long)Math.Round(sccm * 128.0);
-            return WriteToDevice(dev, dev.Address + " " + scaled.ToString(CultureInfo.InvariantCulture) + "\r\r");
+            return WriteToDevice(dev, dev.Address + "S " +
+                sccm.ToString("0.00", CultureInfo.InvariantCulture) + "\r\r");
         }
 
         /// <summary>
