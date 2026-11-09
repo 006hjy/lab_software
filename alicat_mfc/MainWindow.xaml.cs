@@ -44,7 +44,7 @@ namespace alicat_mfc
         private const string DefaultPipeName = "alicat_mfc";
 
         /// <summary>Maximum per-device flow setpoint in SCCM.</summary>
-        private const double MaxFlowSccm = 500.0;
+        private const double MaxFlowSccm = 2000.0;
 
         /// <summary>Maximum concentration value (unitless integer).</summary>
         private const double MaxConcentration = 1000000.0;
@@ -768,9 +768,10 @@ namespace alicat_mfc
                 ShowInputError("Invalid flow value.");
                 return;
             }
-            if (value < 0 || value > 500.0)
+            if (value < 0 || value > MaxFlowSccm)
             {
-                ShowInputError("Flow must be between 0 and 500 SCCM.");
+                ShowInputError("Flow must be between 0 and " +
+                    MaxFlowSccm.ToString("0", CultureInfo.InvariantCulture) + " SCCM.");
                 return;
             }
 
@@ -959,7 +960,8 @@ namespace alicat_mfc
 
             if (targetFlow < 0 || targetFlow > MaxFlowSccm || backgroundFlow < 0 || backgroundFlow > MaxFlowSccm)
             {
-                error = "computed flow is outside 0 - 500 SCCM";
+                error = "computed flow is outside 0 - " +
+                    MaxFlowSccm.ToString("0", CultureInfo.InvariantCulture) + " SCCM";
                 return false;
             }
             return true;
@@ -1723,9 +1725,14 @@ namespace alicat_mfc
 
                     case "set_setpoint":
                     {
-                        if (req.Value < 0 || req.Value > 500.0)
+                        if (req.Value < 0 || req.Value > MaxFlowSccm)
                         {
-                            return ser.Serialize(new PipeResponse { Ok = false, Error = "setpoint must be between 0 and 500 SCCM" });
+                            return ser.Serialize(new PipeResponse
+                            {
+                                Ok = false,
+                                Error = "setpoint must be between 0 and " +
+                                    MaxFlowSccm.ToString("0", CultureInfo.InvariantCulture) + " SCCM"
+                            });
                         }
                         MfcDevice dev = FindDeviceByRole(req.Role);
                         if (dev == null)
